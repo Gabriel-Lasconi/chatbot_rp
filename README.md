@@ -21,9 +21,9 @@ app/
 
 - **chatbot.py:** Basic chatbot logic that asks questions and handles user responses.
 - **emotion_analysis.py:** Identifies emotions from text.
-- **stage_mapping.py:** Maps emotions to Tuckman’s stages and gives feedback based on that
-- **preprocess.py:** Cleans and prepares text before analysis.
 - **main.py:** Runs the application, provides endpoints.
+- - **preprocess.py:** Cleans and prepares text before analysis.
+- **stage_mapping.py:** Maps emotions to Tuckman’s stages and gives feedback based on that.
 - **chat_logs.json:** Stores conversation logs if enabled.
 
 ## How to Use
