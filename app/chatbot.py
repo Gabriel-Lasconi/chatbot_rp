@@ -1,6 +1,5 @@
 # app/chatbot.py
 
-
 from app.emotion_analysis import EmotionDetector
 from app.stage_mapping import StageMapper
 from datetime import datetime
@@ -8,24 +7,20 @@ import json
 
 
 class Chatbot:
-    def __init__(self, log_file_path="chat_logs2.json"):
-        """
-        Initializes the chatbot components and conversation state.
-        """
+    def __init__(self, log_file_path="chat_logs.json"):
         self.emotion_detector = EmotionDetector()
         self.stage_mapper = StageMapper()
 
-        # Conversation state
+        # generic questions to start with
         self.questions = [
             "How do you feel about the team's communication?",
             "What do you think about the team's collaboration?",
             "How is the team progressing toward its goals?",
             "Is there any conflict or frustration in the team?",
         ]
-        self.current_question = 0  # Track the current question
-        self.chat_history = []  # Log chat messages for smarter responses
+        self.current_question = 0
+        self.chat_history = []
 
-        # Logging setup
         self.log_file_path = log_file_path
 
     def ask_next_question(self):
@@ -36,7 +31,7 @@ class Chatbot:
             question = self.questions[self.current_question]
             self.current_question += 1
             return question
-        return None  # No more questions
+        return None
 
     def log_interaction(self, user_message, bot_response, emotion_results):
         """
@@ -59,19 +54,19 @@ class Chatbot:
         Process the user's response, detect emotions, map to a stage, and generate feedback.
         """
         try:
-            # Step 1: Detect emotions
+            # Detect emotions
             emotion_results = self.emotion_detector.detect_emotion(text)
             dominant_emotion = emotion_results["label"]
             confidence = emotion_results["score"]
             print(f"[DEBUG] Dominant emotion: {dominant_emotion} (confidence: {confidence:.2f})")
 
-            # Step 2: Map emotion to stage
+            # map emotion to stage
             stage = self.stage_mapper.map_emotion_to_stage(dominant_emotion)
 
-            # Step 3: Generate feedback for the stage
+            # generate feedback for the stage
             feedback = self.stage_mapper.get_feedback_for_stage(stage)
 
-            # Step 4: Ask next question or provide feedback
+            # ask next question or provide feedback
             next_question = self.ask_next_question()
             if next_question:
                 self.log_interaction(text, next_question, emotion_results["all_scores"])
