@@ -1,24 +1,18 @@
-#app/stage_mapping.py - class for stage-emotion mappings and feedback.
+from langchain_ollama import OllamaLLM
 
 
 class StageMapper:
     def __init__(self):
-        # emotions corresponding to each stage taken from table in literature review
         self.stage_emotion_map = {
             "Forming": ["excitement", "anticipation", "anxiety", "curiosity", "eagerness"],
             "Storming": ["frustration", "tension", "defensiveness", "conflict", "uncertainty"],
             "Norming": ["relief", "trust", "acceptance", "cohesion", "camaraderie", "optimism"],
-            "Performing": ["confidence", "enthusiasm", "pride", "accomplishment", "satisfaction", "cohesion"],
+            "Performing": ["confidence", "enthusiasm", "pride", "accomplishment", "satisfaction"],
             "Adjourning": ["nostalgia", "closure", "sadness", "reflection"]
         }
-        # generic feedback given for each stage (just a base to start from)
-        self.stage_feedback = {
-            "Forming": "It appears your team is in the Forming stage. This is a time for building trust and getting acquainted. Encourage open communication and help team members understand their roles.",
-            "Storming": "Your team seems to be in the Storming stage. Tensions and conflicts may arise. Consider addressing issues openly, clarifying goals, and building mutual respect.",
-            "Norming": "Your team is in the Norming stage. Members are learning to collaborate effectively. Reinforce positive behavior, celebrate small wins, and encourage further cohesion.",
-            "Performing": "Your team is Performing well. They are likely functioning at a high level. Maintain the momentum, reward achievements, and consider new challenges to keep motivation high.",
-            "Adjourning": "Your team appears to be in the Adjourning stage. It’s time to reflect on the journey, acknowledge accomplishments, and ensure a supportive closure. Discuss lessons learned and future opportunities."
-        }
+
+        # LLaMA model for generating dynamic feedback
+        self.llama_model = OllamaLLM(model="llama3.2")
 
     def map_emotion_to_stage(self, emotion: str):
         """
@@ -37,12 +31,29 @@ class StageMapper:
 
     def get_feedback_for_stage(self, stage: str):
         """
-        Get feedback for a specific team stage.
+        Generate dynamic feedback for a specific team stage using LLaMA.
 
         Args:
             stage (str): Team stage.
 
         Returns:
-            str: Feedback for the stage.
+            str: Dynamically generated feedback for the stage.
         """
-        return self.stage_feedback.get(stage, "No feedback available for this stage.")
+        if stage not in self.stage_emotion_map:
+            return "No feedback available for this stage."
+
+        # Build prompt for LLaMA
+        prompt = (
+            f"You are a team dynamics expert. Provide thoughtful and practical advice for a team in the '{stage}' stage "
+            f"of Tuckman's model of team development. Include actionable suggestions to improve team performance and to handle this stage better."
+            f"Please keep the message brief (around 2-3 sentences) and use basic english. "
+            f"Do not write the message in bullet points or ordered lists. Write it as a normal message"
+        )
+
+        try:
+            # Invoke LLaMA to generate feedback
+            response = self.llama_model.invoke(input=prompt)
+            return response.strip()
+        except Exception as e:
+            print(f"[ERROR] Failed to generate feedback with LLaMA: {e}")
+            return "An error occurred while generating feedback. Please try again."

@@ -1,78 +1,61 @@
-# app/chatbot_generative.py - class where I am trying to implement a different type of chatbot that generates messages automatically
-# for now this class is not in use
-
-
-from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig
+from langchain_ollama import OllamaLLM
 from app.emotion_analysis import EmotionDetector
 from app.stage_mapping import StageMapper
-import torch
 
 
 class ChatbotGenerative:
     def __init__(self):
-        self.model_name = "tiiuae/falcon-40b"
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, use_fast=False)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_name,
-            device_map="auto",
-            trust_remote_code=True
-        )
+        """
+        Initializes the chatbot using the Ollama LLaMA model.
+        """
+        # Load the LLaMA model via Ollama
+        self.model = OllamaLLM(model="llama3.2")
 
+        # Initialize emotion detector and stage mapper
         self.emotion_detector = EmotionDetector()
         self.stage_mapper = StageMapper()
 
+        # Conversation state
         self.chat_history = []
         self.questions_asked = 0
         self.max_questions = 3
 
-        # instructions
+        # System instructions
         self.system_instructions = (
             "You are a helpful assistant that identifies a team's emotional climate "
-            "and maps it to Tuckman's stages. Over the course of up to 3 user responses, "
-            "ask natural follow-up questions about the team's feelings, then provide concluding feedback."
+            "and maps it to Tuckman's stages of team development. Over the course of up to 3 user responses, "
+            "ask natural and brief follow-up questions about the team's feelings, then provide concluding feedback."
         )
 
-    def _build_prompt(self, user_message):
+    def build_prompt(self, user_message):
         """
-        Build the prompt according to Falcon chat format.
+        Build the prompt for the LLaMA model including system instructions and chat history.
         """
+        # Combine system instructions and conversation history
         conversation_str = "\n".join(self.chat_history)
 
+        # Add the user message
         prompt = (
-            f"System: {self.system_instructions}\n\n"
+            f"<<SYS>>\n{self.system_instructions}\n<</SYS>>\n\n"
             f"{conversation_str}\n"
             f"User: {user_message}\n"
             "Assistant:"
         )
         return prompt
 
-    def _generate_response(self, user_message):
+    def generate_response(self, user_message):
         """
-        Generate a response using the Falcon model.
+        Generate a response using the LLaMA model via Ollama.
         """
-        prompt = self._build_prompt(user_message)
+        prompt = self.build_prompt(user_message)
 
-        gen_config = GenerationConfig(
-            max_new_tokens=200,
-            temperature=0.7,
-            top_p=0.9,
-            repetition_penalty=1.1,
-            do_sample=True
-        )
+        # Invoke the LLaMA model for generating the response
+        response = self.model.invoke(input=prompt)
 
-        inputs = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=True)
-        inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+        # Clean and process the response
+        assistant_response = response.strip()
 
-        with torch.no_grad():
-            output = self.model.generate(**inputs, generation_config=gen_config)
-
-        response = self.tokenizer.decode(output[0], skip_special_tokens=True).strip()
-
-        if "Assistant:" in response:
-            assistant_response = response.split("Assistant:", 1)[-1].strip()
-        else:
-            assistant_response = response
-
+        # Update chat history
         self.chat_history.append(f"User: {user_message}")
         self.chat_history.append(f"Assistant: {assistant_response}")
 
@@ -83,19 +66,21 @@ class ChatbotGenerative:
         Process the user's message, detect emotions, map to a stage, and generate a response.
         """
         try:
+            # Detect emotions
             emotion_results = self.emotion_detector.detect_emotion(text)
             dominant_emotion = emotion_results["label"]
 
+            # Map emotion to stage and provide feedback
             stage = self.stage_mapper.map_emotion_to_stage(dominant_emotion)
             feedback = self.stage_mapper.get_feedback_for_stage(stage)
 
             self.questions_asked += 1
 
             if self.questions_asked < self.max_questions:
-                bot_response = self._generate_response(text)
+                bot_response = self.generate_response(text)
                 return {"bot_message": bot_response, "stage": None, "feedback": None}
             else:
-                bot_response = self._generate_response(text)
+                bot_response = self.generate_response(text)
                 return {"bot_message": bot_response, "stage": stage, "feedback": feedback}
 
         except Exception as e:
@@ -104,7 +89,7 @@ class ChatbotGenerative:
 
     def reset_conversation(self):
         """
-        Reset the conversation state.
+        Reset the conversation state for a new session.
         """
         self.questions_asked = 0
         self.chat_history = []

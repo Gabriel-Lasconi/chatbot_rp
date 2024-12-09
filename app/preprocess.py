@@ -3,25 +3,28 @@
 import re
 import spacy
 
-
 class Preprocessor:
     def __init__(self):
         self.nlp = spacy.load("en_core_web_sm")
 
-    def clean(self, text: str) -> str:
+    def clean(self, text: str, preprocess: bool = False) -> str:
         """
-        Clean the input text by removing special characters, extra spaces, and converting to lowercase.
+        Preprocess the text or return it as is based on the flag.
 
         Args:
             text (str): The user input.
+            preprocess (bool): Whether to preprocess the text or not.
 
         Returns:
-            str: The cleaned text.
+            str: The cleaned or raw text.
         """
+        if not preprocess:
+            return text  # Skip preprocessing and return the raw text
+
         if not text.strip():
             return ""
 
-        #Get rid of special characters or extra unnecesarry spaces
+        # Preprocessing logic
         text = re.sub(r"[^a-zA-Z0-9\s]", "", text)
         text = re.sub(r"\s+", " ", text).strip()
 
