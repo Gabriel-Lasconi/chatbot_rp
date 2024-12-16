@@ -12,3 +12,4 @@ attrs~=24.2.0
 protobuf~=5.29.1
 pillow~=11.0.0
 filelock~=3.16.1
+langchain-ollama
