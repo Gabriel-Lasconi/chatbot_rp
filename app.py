@@ -1,5 +1,4 @@
 import gradio as gr
-import os
 from app.chatbot_generative import ChatbotGenerative
 
 # Initialize the chatbot
@@ -23,7 +22,6 @@ def chat_with_bot(user_input):
         return f"Bot: {response}\nFeedback: {feedback}\nStage: {stage}"
     return f"Bot: {response}"
 
-# Gradio Interface
 demo = gr.Interface(
     fn=chat_with_bot,
     inputs=gr.Textbox(placeholder="Type your message here...", label="User Input"),
@@ -35,7 +33,5 @@ demo = gr.Interface(
     ),
 )
 
-# Launch with dynamic port binding for Hugging Face Spaces
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 7860))  # Use PORT variable from Hugging Face or fallback to 7860
-    demo.launch(server_name="0.0.0.0", server_port=port, share=True)
+    demo.launch()
