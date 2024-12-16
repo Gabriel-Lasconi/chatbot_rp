@@ -3,13 +3,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from app.chatbot import Chatbot
+# from app.chatbot import Chatbot
+from app.chatbot_generative import ChatbotGenerative
 
 app = FastAPI()
 
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"],)
 
-chatbot = Chatbot()
+chatbot = ChatbotGenerative()
 
 class Message(BaseModel):
     text: str
