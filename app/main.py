@@ -7,7 +7,7 @@ from app.chatbot_generative import ChatbotGenerative
 # Initialize the FastAPI app
 app = FastAPI()
 
-# Allow CORS for all origins during development/testing
+# Allow CORS for all origins (useful during development/testing)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -16,43 +16,56 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize the Chatbot instance
+# Initialize the Chatbot instance in "conversation" mode
 chatbot = ChatbotGenerative()
 
-# Pydantic model for message input
+
+# Pydantic model for the user's input text
 class Message(BaseModel):
     text: str
+
 
 @app.get("/")
 def root():
     """
     Root endpoint to check if the API is working.
     """
-    return {"message": "Welcome to the Chatbot API!"}
+    return {"message": "Welcome to the Chatbot API (Conversation Mode)!"}
+
 
 @app.post("/chat")
 def chat_with_bot(message: Message):
     """
-    Endpoint to interact with the chatbot.
+    Endpoint to have a one-on-one conversation with the chatbot.
+
+    Each POST request sends one user message. The chatbot responds
+    with a short answer and possibly partial or final stage feedback
+    if it has enough confidence in its classification.
     """
-    result = chatbot.process_message(message.text)
+    # We call the "process_line" method (updated in your ChatbotGenerative),
+    # which will return (bot_message, final_stage, stage_feedback).
+    bot_message, final_stage, feedback = chatbot.process_line(message.text)
+
     return {
-        "bot_message": result["bot_message"],
-        "stage": result["stage"],
-        "feedback": result["feedback"],
+        "bot_message": bot_message,
+        "stage": final_stage,
+        "feedback": feedback,
     }
+
 
 @app.post("/reset")
 def reset_chat():
     """
-    Endpoint to reset the chatbot conversation.
+    Endpoint to reset the chatbot conversation state,
+    clearing all chat history and stage confidence.
     """
     chatbot.reset_conversation()
     return {"message": "Chatbot session has been reset."}
 
-# Run the Uvicorn server with Render compatibility
+
+# Run the Uvicorn server with environment variable PORT compatibility
 if __name__ == "__main__":
     import uvicorn
-    # Use PORT from environment variable if it exists, otherwise default to 8000
+
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=False)

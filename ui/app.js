@@ -7,12 +7,10 @@ async function sendMessage() {
         return;
     }
 
-    // Add user message bubble
     conversation.innerHTML += `<div class="bubble user">${userInput}</div>`;
     conversation.scrollTop = conversation.scrollHeight;
 
     try {
-        // Fetch chatbot response
         const response = await fetch("http://127.0.0.1:8000/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -28,7 +26,6 @@ async function sendMessage() {
         const stage = data.stage || "Uncertain";
         const feedback = data.feedback || "";
 
-        // Add bot message bubble
         conversation.innerHTML += `<div class="bubble bot">${botMessage}</div>`;
         if (stage && feedback) {
             conversation.innerHTML += `<div class="bubble bot"><strong>Stage:</strong> ${stage}<br><strong>Feedback:</strong> ${feedback}</div>`;
@@ -40,6 +37,5 @@ async function sendMessage() {
         alert("Could not connect to the chatbot. Ensure the server is running.");
     }
 
-    // Clear input
     document.getElementById("userInput").value = "";
 }
