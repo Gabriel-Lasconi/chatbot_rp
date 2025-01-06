@@ -1,135 +1,377 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Team Chatbot</title>
-    <style>
-        /* General styling */
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #f0f2f5;
-        }
-        #chatbox {
-            width: 400px;
-            height: 600px;
-            border-radius: 15px;
-            background: white;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        #header {
-            background: #4a90e2;
-            color: white;
-            text-align: center;
-            padding: 15px;
-            font-size: 18px;
-            border-top-left-radius: 15px;
-            border-top-right-radius: 15px;
-        }
-        #conversation {
-            flex: 1;
-            padding: 10px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .bubble {
-            padding: 10px 15px;
-            border-radius: 20px;
-            font-size: 14px;
-            max-width: 70%;
-            animation: fadeIn 0.3s ease-in-out;
-        }
-        .user {
-            background: #e0f7fa;
-            align-self: flex-end;
-        }
-        .bot {
-            background: #f1f0f0;
-            align-self: flex-start;
-        }
-        #input-box {
-            display: flex;
-            padding: 10px;
-            border-top: 1px solid #ccc;
-            align-items: center;
-        }
-        #userInput {
-            flex: 1;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 20px;
-            font-size: 16px;
-            outline: none;
-        }
-        button {
-            background: #4a90e2;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            font-size: 16px;
-            border-radius: 20px;
-            margin-left: 10px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        button:hover {
-            background-color: #357ab8;
-        }
-        /* Animations */
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        #avatar {
-            display: flex;
-            justify-content: center;
-            margin-bottom: 10px;
-        }
-        #avatar img {
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            animation: bounce 1.5s infinite;
-        }
-        @keyframes bounce {
-            0%, 100% {
-                transform: translateY(0);
-            }
-            50% {
-                transform: translateY(-10px);
-            }
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Team Chatbot</title>
+  <style>
+    /* General styling */
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #f0f2f5;
+    }
+    #chatbox {
+      width: 400px;
+      height: 740px; /* increased for toggles */
+      border-radius: 15px;
+      background: white;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    #header {
+      background: #4a90e2;
+      color: white;
+      text-align: center;
+      padding: 15px;
+      font-size: 18px;
+      border-top-left-radius: 15px;
+      border-top-right-radius: 15px;
+    }
+    #modeToggle {
+      display: flex;
+      justify-content: space-around;
+      padding: 8px;
+      border-bottom: 1px solid #ccc;
+    }
+    .mode-btn {
+      flex: 1;
+      margin: 0 5px;
+      padding: 8px;
+      border: none;
+      border-radius: 15px;
+      background: #4a90e2;
+      color: white;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .mode-btn:hover {
+      background-color: #357ab8;
+    }
+    #avatar {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+    #avatar img {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      animation: bounce 1.5s infinite;
+    }
+    @keyframes bounce {
+      0%, 100% {
+        transform: translateY(0);
+      }
+      50% {
+        transform: translateY(-10px);
+      }
+    }
+    #conversation {
+      flex: 1;
+      padding: 10px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .bubble {
+      padding: 10px 15px;
+      border-radius: 20px;
+      font-size: 14px;
+      max-width: 70%;
+      animation: fadeIn 0.3s ease-in-out;
+    }
+    .user {
+      background: #e0f7fa;
+      align-self: flex-end;
+    }
+    .bot {
+      background: #f1f0f0;
+      align-self: flex-start;
+    }
+    #input-box {
+      display: flex;
+      flex-direction: column;
+      border-top: 1px solid #ccc;
+      padding: 10px;
+    }
+    #teamContainer {
+      display: flex;
+      margin-bottom: 10px;
+    }
+    #teamName {
+      flex: 1;
+      padding: 8px;
+      margin-right: 10px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 20px;
+      outline: none;
+    }
+    #conversationMode, #analysisMode {
+      margin-bottom: 10px;
+    }
+    #conversationMode, #analysisMode label {
+      font-size: 14px;
+    }
+    #conversationInput {
+      display: flex;
+      margin-bottom: 10px;
+    }
+    #userInput {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 20px;
+      font-size: 16px;
+      outline: none;
+    }
+    button {
+      background: #4a90e2;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 20px;
+      margin-left: 10px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #357ab8;
+    }
+    .analysis-section {
+      display: flex;
+      flex-direction: column;
+    }
+    #analysisInput {
+      width: 100%;
+      height: 80px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
+      padding: 8px;
+      resize: vertical;
+    }
+    .hidden {
+      display: none !important;
+    }
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
 </head>
 <body>
-    <div id="chatbox">
-        <div id="header">Team Chatbot</div>
-        <div id="avatar">
-            <img src="https://cdn-icons-png.flaticon.com/512/149/149071.png" alt="Chatbot Avatar">
-        </div>
-        <div id="conversation"></div>
-        <div id="input-box">
-            <input type="text" id="userInput" placeholder="Type your message here..." />
-            <button onclick="sendMessage()">Send</button>
-        </div>
+<div id="chatbox">
+  <div id="header">Team Chatbot</div>
+  <div id="modeToggle">
+    <button class="mode-btn" id="convBtn" onclick="activateConversationMode()">Conversation Mode</button>
+    <button class="mode-btn" id="analBtn" onclick="activateAnalysisMode()">Analysis Mode</button>
+  </div>
+
+  <div id="avatar">
+    <img src="https://cdn-icons-png.flaticon.com/512/149/149071.png" alt="Chatbot Avatar">
+  </div>
+
+  <div id="conversation"></div>
+
+  <div id="input-box">
+    <!-- Team Name Input (always shown, but reset on mode toggle) -->
+    <div id="teamContainer">
+      <input type="text" id="teamName" placeholder="Enter Team Name..." />
     </div>
 
-    <script src="app.js"></script>
+    <!-- Conversation Mode Section -->
+    <div id="conversationMode">
+      <div id="conversationInput">
+        <input type="text" id="userInput" placeholder="Type your message here..." />
+        <button onclick="sendMessage()">Send</button>
+      </div>
+    </div>
+
+    <!-- Analysis Mode Section -->
+    <div id="analysisMode" class="hidden">
+      <label for="analysisInput" style="margin-bottom:4px;">
+        Paste multiple lines for analysis (one per line):
+      </label>
+      <textarea id="analysisInput" placeholder="Enter your lines here..." ></textarea>
+      <button style="margin-top: 8px;" onclick="analyzeConversation()">Analyze</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/**
+ * Switch to Conversation Mode
+ * - Show conversation inputs, hide analysis
+ * - Reset teamName and other fields
+ */
+function activateConversationMode() {
+  // Clear existing UI
+  document.getElementById("analysisMode").classList.add("hidden");
+  document.getElementById("conversationMode").classList.remove("hidden");
+  document.getElementById("teamName").value = "";
+  document.getElementById("analysisInput").value = "";
+  document.getElementById("userInput").value = "";
+}
+
+/**
+ * Switch to Analysis Mode
+ * - Show the analysis textarea, hide conversation line input
+ * - Reset teamName and other fields
+ */
+function activateAnalysisMode() {
+  document.getElementById("conversationMode").classList.add("hidden");
+  document.getElementById("analysisMode").classList.remove("hidden");
+  document.getElementById("teamName").value = "";
+  document.getElementById("analysisInput").value = "";
+  document.getElementById("userInput").value = "";
+}
+
+/**
+ * Send a single line to conversation endpoint
+ */
+async function sendMessage() {
+  const teamNameElem = document.getElementById("teamName");
+  const userInputElem = document.getElementById("userInput");
+  const conversationElem = document.getElementById("conversation");
+
+  const teamName = teamNameElem.value.trim();
+  const userMsg = userInputElem.value.trim();
+
+  if (!teamName) {
+    alert("Please enter a team name!");
+    return;
+  }
+  if (!userMsg) {
+    alert("Please enter a message!");
+    return;
+  }
+
+  // Display user's message in the chat
+  conversationElem.innerHTML += `<div class="bubble user">${userMsg}</div>`;
+  conversationElem.scrollTop = conversationElem.scrollHeight;
+
+  // Prepare payload for conversation mode
+  const payload = {
+    text: userMsg,
+    team_name: teamName
+  };
+
+  try {
+    const response = await fetch("http://127.0.0.1:8000/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to connect to the chatbot (conversation mode).");
+    }
+
+    const data = await response.json();
+    const botMessage = data.bot_message || "No response available.";
+    const stage = data.stage || "";
+    const feedback = data.feedback || "";
+
+    // Display bot message
+    conversationElem.innerHTML += `<div class="bubble bot">${botMessage}</div>`;
+    if (stage && feedback) {
+      conversationElem.innerHTML +=
+        `<div class="bubble bot"><strong>Stage:</strong> ${stage}<br><strong>Feedback:</strong> ${feedback}</div>`;
+    }
+    conversationElem.scrollTop = conversationElem.scrollHeight;
+  } catch (error) {
+    console.error("Error:", error);
+    alert(error.message);
+  }
+
+  userInputElem.value = "";
+}
+
+/**
+ * Analyze multiple lines in one call
+ */
+async function analyzeConversation() {
+  const teamNameElem = document.getElementById("teamName");
+  const analysisInputElem = document.getElementById("analysisInput");
+  const conversationElem = document.getElementById("conversation");
+
+  const teamName = teamNameElem.value.trim();
+  const bulkText = analysisInputElem.value.trim();
+
+  if (!teamName) {
+    alert("Please enter a team name!");
+    return;
+  }
+  if (!bulkText) {
+    alert("Please enter multiple lines to analyze!");
+    return;
+  }
+
+  // Split lines by newline
+  const lines = bulkText.split("\n").map(line => line.trim()).filter(line => line !== "");
+  if (lines.length === 0) {
+    alert("Please provide at least one line of text for analysis!");
+    return;
+  }
+
+  // Prepare payload
+  const payload = {
+    team_name: teamName,
+    lines: lines
+  };
+
+  try {
+    const response = await fetch("http://127.0.0.1:8000/analyze", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to connect to the chatbot (analysis mode).");
+    }
+
+    const data = await response.json();
+    const finalStage = data.final_stage || "Uncertain";
+    const feedback = data.feedback || "";
+
+    // Show user that analysis is done
+    conversationElem.innerHTML += `<div class="bubble user" style="font-style:italic;">(Analyzed ${lines.length} lines for team: ${teamName})</div>`;
+
+    if (finalStage !== "Uncertain") {
+      conversationElem.innerHTML += `<div class="bubble bot"><strong>Final Stage:</strong> ${finalStage}<br><strong>Feedback:</strong> ${feedback}</div>`;
+    } else {
+      conversationElem.innerHTML += `<div class="bubble bot">No definitive stage concluded (still uncertain).</div>`;
+    }
+    conversationElem.scrollTop = conversationElem.scrollHeight;
+  } catch (error) {
+    console.error("Error:", error);
+    alert(error.message);
+  }
+
+  // Optionally clear the analysis input
+  analysisInputElem.value = "";
+}
+</script>
 </body>
 </html>

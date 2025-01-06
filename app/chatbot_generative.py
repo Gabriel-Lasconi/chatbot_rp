@@ -1,40 +1,42 @@
 # from langchain_ollama import OllamaLLM
 # from app.emotion_analysis import EmotionDetector
 # from app.stage_mapping import StageMapper
-#
+# from app.db import SessionLocal, Team, Message
 #
 # class ChatbotGenerative:
 #     def __init__(self):
 #         """
 #         Initializes the chatbot using the Ollama LLaMA model.
 #         """
-#         # Load the LLaMA model via Ollama
 #         self.model = OllamaLLM(model="llama3.2")
-#
-#         # Initialize emotion detector and stage mapper
 #         self.emotion_detector = EmotionDetector()
 #         self.stage_mapper = StageMapper()
 #
-#         # Conversation state
-#         self.chat_history = []
-#         self.questions_asked = 0
-#         self.max_questions = 3
-#
-#         # System instructions
+#         # The system instructions emphasize brevity and short follow-ups.
 #         self.system_instructions = (
-#             "You are a helpful assistant that identifies a team's emotional climate "
-#             "and maps it to Tuckman's stages of team development. Over the course of up to 3 user responses, "
-#             "ask natural and brief follow-up questions about the team's feelings, then provide concluding feedback."
+#             "You are a concise assistant analyzing a team's emotional climate "
+#             "and mapping it to Tuckman's stages. Only ask short follow-up questions "
+#             "until you feel confident about the team's stage. Provide short concluding feedback. "
+#             "Avoid lengthy elaborations or repeating instructions."
 #         )
 #
-#     def build_prompt(self, user_message):
+#     def _load_team_state(self, db, team_name: str):
 #         """
-#         Build the prompt for the LLaMA model including system instructions and chat history.
+#         Retrieve or create a Team record by name. Returns the Team ORM object.
 #         """
-#         # Combine system instructions and conversation history
-#         conversation_str = "\n".join(self.chat_history)
+#         team = db.query(Team).filter(Team.name == team_name).first()
+#         if not team:
+#             team = Team(name=team_name, current_stage="Uncertain", stage_confidence=0.0)
+#             db.add(team)
+#             db.commit()
+#             db.refresh(team)
+#         return team
 #
-#         # Add the user message
+#     def _build_prompt(self, conversation_str: str, user_message: str) -> str:
+#         """
+#         Builds the prompt for the LLaMA model, including system instructions,
+#         existing conversation, and the new user message.
+#         """
 #         prompt = (
 #             f"<<SYS>>\n{self.system_instructions}\n<</SYS>>\n\n"
 #             f"{conversation_str}\n"
@@ -43,114 +45,161 @@
 #         )
 #         return prompt
 #
-#     def generate_response(self, user_message):
+#     def _generate_response(self, conversation_str: str, user_message: str) -> str:
 #         """
-#         Generate a response using the LLaMA model via Ollama.
+#         Generate a short, concise response from the LLaMA model via Ollama,
+#         using the built prompt that includes conversation history + user_message.
 #         """
-#         prompt = self.build_prompt(user_message)
-#
-#         # Invoke the LLaMA model for generating the response
+#         prompt = self._build_prompt(conversation_str, user_message)
 #         response = self.model.invoke(input=prompt)
+#         return response.strip()
 #
-#         # Clean and process the response
-#         assistant_response = response.strip()
-#
-#         # Update chat history
-#         self.chat_history.append(f"User: {user_message}")
-#         self.chat_history.append(f"Assistant: {assistant_response}")
-#
-#         return assistant_response
-#
-#     def process_message(self, text):
+#     def process_line(self, db, team_name: str, text: str):
 #         """
-#         Process the user's message, detect emotions, map to a stage, and generate a response.
+#         Process a single line from a user. This does:
+#           1. Load or create the Team row from DB.
+#           2. Insert a 'User' Message row with the text.
+#           3. Detect emotion, possibly update the stage in the Team row.
+#           4. Build a conversation string from the messages so far.
+#           5. Generate an Assistant response and insert it into DB.
+#           6. If stage confidence is above threshold, produce final stage feedback.
+#         Returns (bot_message, final_stage, stage_feedback).
 #         """
-#         try:
-#             # Detect emotions
-#             emotion_results = self.emotion_detector.detect_emotion(text)
-#             dominant_emotion = emotion_results["label"]
+#         # 1. Load or create team
+#         team = self._load_team_state(db, team_name)
 #
-#             # Map emotion to stage and provide feedback
-#             stage = self.stage_mapper.map_emotion_to_stage(dominant_emotion)
-#             feedback = self.stage_mapper.get_feedback_for_stage(stage)
+#         # 2. Insert user message
+#         user_msg = Message(
+#             team_id=team.id,
+#             role="User",
+#             text=text
+#         )
+#         db.add(user_msg)
+#         db.commit()
+#         db.refresh(user_msg)
 #
-#             self.questions_asked += 1
+#         # 3. Emotion detection -> stage inference
+#         emotion_results = self.emotion_detector.detect_emotion(text)
+#         dominant_emotion = emotion_results["label"]
 #
-#             if self.questions_asked < self.max_questions:
-#                 bot_response = self.generate_response(text)
-#                 return {"bot_message": bot_response, "stage": None, "feedback": None}
-#             else:
-#                 bot_response = self.generate_response(text)
-#                 return {"bot_message": bot_response, "stage": stage, "feedback": feedback}
-#
-#         except Exception as e:
-#             print(f"[ERROR] {e}")
-#             return {"bot_message": "An error occurred. Please try again.", "stage": "Error", "feedback": None}
-#
-#     def reset_conversation(self):
-#         """
-#         Reset the conversation state for a new session.
-#         """
-#         self.questions_asked = 0
-#         self.chat_history = []
-#
-#
-# if __name__ == "__main__":
-#     chatbot = ChatbotGenerative()
-#     print("Chatbot is ready! Type 'reset' to reset the conversation or 'exit' to quit.")
-#
-#     while True:
-#         user_input = input("You: ")
-#         if user_input.lower() == "exit":
-#             print("Goodbye!")
-#             break
-#         elif user_input.lower() == "reset":
-#             chatbot.reset_conversation()
-#             print("Conversation reset.")
+#         new_stage = self.stage_mapper.infer_stage_with_memory(dominant_emotion, team.current_stage)
+#         if new_stage != team.current_stage:
+#             team.current_stage = new_stage
+#             team.stage_confidence = 1.0 if new_stage != "Uncertain" else 0.0
 #         else:
-#             result = chatbot.process_message(user_input)
-#             print("Bot:", result["bot_message"])
-#             if result["feedback"]:
-#                 print("Bot (Stage Feedback):", result["feedback"])
+#             if team.current_stage != "Uncertain":
+#                 team.stage_confidence += 1.0
+#
+#         # Build a conversation string (optional to limit last N messages)
+#         messages = db.query(Message).filter(Message.team_id == team.id).order_by(Message.id).all()
+#         lines_for_prompt = []
+#         for msg in messages:
+#             if msg.role.lower() == "assistant":
+#                 lines_for_prompt.append(f"Assistant: {msg.text}")
+#             else:
+#                 lines_for_prompt.append(f"User: {msg.text}")
+#         conversation_str = "\n".join(lines_for_prompt)
+#
+#         # 4. Generate assistant response
+#         bot_response = self._generate_response(conversation_str, text)
+#
+#         # Insert assistant message
+#         assistant_msg = Message(
+#             team_id=team.id,
+#             role="Assistant",
+#             text=bot_response,
+#             detected_emotion=dominant_emotion,
+#             stage_at_time=team.current_stage
+#         )
+#         db.add(assistant_msg)
+#
+#         # 5. Final stage determination if threshold exceeded
+#         final_stage = None
+#         stage_feedback = None
+#         threshold = 3  # or another logic
+#         if team.current_stage != "Uncertain" and team.stage_confidence >= threshold:
+#             final_stage = team.current_stage
+#             stage_feedback = self.stage_mapper.get_feedback_for_stage(team.current_stage)
+#
+#         # Commit
+#         db.commit()
+#
+#         return bot_response, final_stage, stage_feedback
+#
+#     def analyze_conversation_db(self, db, team_name: str, lines: list):
+#         """
+#         Processes multiple lines for a given team in 'analysis' mode.
+#         Returns final_stage and feedback if reached.
+#         """
+#         final_stage = None
+#         feedback = None
+#
+#         for line in lines:
+#             bot_msg, concluded_stage, concluded_feedback = self.process_line(db, team_name, line)
+#
+#             if concluded_stage:
+#                 final_stage = concluded_stage
+#                 feedback = concluded_feedback
+#                 break
+#
+#         return final_stage, feedback
+#
+#     def reset_team(self, db, team_name: str):
+#         """
+#         Reset a team's conversation state: set stage=Uncertain, confidence=0,
+#         and optionally clear messages from DB.
+#         """
+#         team = db.query(Team).filter(Team.name == team_name).first()
+#         if team:
+#             team.current_stage = "Uncertain"
+#             team.stage_confidence = 0.0
+#             db.query(Message).filter(Message.team_id == team.id).delete()
+#             db.commit()
 
-# chatbot_generative.py (Updated)
 from langchain_ollama import OllamaLLM
 from app.emotion_analysis import EmotionDetector
 from app.stage_mapping import StageMapper
+from app.db import SessionLocal, Team, Message
 
 class ChatbotGenerative:
     def __init__(self):
         """
         Initializes the chatbot using the Ollama LLaMA model.
         """
-        # Load the LLaMA model via Ollama
         self.model = OllamaLLM(model="llama3.2")
-
-        # Initialize emotion detector and stage mapper
         self.emotion_detector = EmotionDetector()
         self.stage_mapper = StageMapper()
 
-        # Conversation state
-        self.chat_history = []
-
-        # We'll store the "current_stage" and a confidence measure for it
-        self.current_stage = None
-        self.stage_confidence = 0
-        self.stage_confidence_threshold = 3  # for example, require 3 consistent lines to finalize
-
-        # System instructions: keep responses short, ask relevant follow-ups
+        # System instructions remain the same
         self.system_instructions = (
             "You are a concise assistant analyzing a team's emotional climate "
             "and mapping it to Tuckman's stages. Only ask short follow-up questions "
-            "until you feel confident about the team's stage. Provide short concluding feedback. "
-            "Avoid lengthy elaborations or repeating instructions. "
+            "Avoid lengthy elaborations or repeating instructions."
         )
 
-    def build_prompt(self, user_message):
+        # We'll store partial distributions for multiple messages in memory.
+        # Once we have at least 3 messages, we see if any stage's sum > 0.7
+        # We'll also keep track in the DB the team's current stage, but it
+        # won't finalize until the distribution surpasses 70%.
+        # This approach ensures multi-message accumulation.
+        #
+        # For demonstration, we accumulate ephemeral data here. In a real system,
+        # you might store partial distributions in the DB too.
+
+    def _load_team_state(self, db, team_name: str):
         """
-        Build the prompt for the LLaMA model including system instructions and chat history.
+        Retrieve or create a Team record by name. Returns the Team ORM object.
+        If you want to track partial distributions in DB, you'd adapt this approach.
         """
-        conversation_str = "\n".join(self.chat_history)
+        team = db.query(Team).filter(Team.name == team_name).first()
+        if not team:
+            team = Team(name=team_name, current_stage="Uncertain", stage_confidence=0.0)
+            db.add(team)
+            db.commit()
+            db.refresh(team)
+        return team
+
+    def _build_prompt(self, conversation_str: str, user_message: str) -> str:
         prompt = (
             f"<<SYS>>\n{self.system_instructions}\n<</SYS>>\n\n"
             f"{conversation_str}\n"
@@ -159,93 +208,127 @@ class ChatbotGenerative:
         )
         return prompt
 
-    def generate_response(self, user_message):
-        """
-        Generate a concise response using the LLaMA model via Ollama.
-        """
-        prompt = self.build_prompt(user_message)
+    def _generate_response(self, conversation_str: str, user_message: str) -> str:
+        prompt = self._build_prompt(conversation_str, user_message)
         response = self.model.invoke(input=prompt)
-        assistant_response = response.strip()
+        return response.strip()
 
-        # Append to history
-        self.chat_history.append(f"User: {user_message}")
-        self.chat_history.append(f"Assistant: {assistant_response}")
-
-        return assistant_response
-
-    def process_line(self, text):
+    def process_line(self, db, team_name: str, text: str):
         """
-        Process a single line from the user or script, detect emotion, update stage confidence,
-        and generate a short response. Returns (bot_message, final_stage, stage_feedback).
+        1. Insert user message -> DB
+        2. Use top-5 emotions -> compute stage distribution from that line
+        3. Accumulate distribution in the team's DB columns accum_distribution + num_lines
+        4. If we have >= 3 lines and a stage sum > 0.7, finalize that stage
+        5. Generate an assistant response
+        6. If we finalize stage, store it in DB
         """
-        # 1. Detect emotion
-        emotion_results = self.emotion_detector.detect_emotion(text)
-        dominant_emotion = emotion_results["label"]
+        # 1. Load or create team
+        team = self._load_team_state(db, team_name)
 
-        # 2. Map to stage (with memory logic inside stage mapper)
-        new_stage = self.stage_mapper.infer_stage_with_memory(dominant_emotion, self.current_stage)
+        # Insert the user message
+        user_msg = Message(team_id=team.id, role="User", text=text)
+        db.add(user_msg)
+        db.commit()
+        db.refresh(user_msg)
 
-        # If stage changed, reset or upgrade confidence
-        if new_stage != self.current_stage:
-            self.current_stage = new_stage
-            self.stage_confidence = 1 if new_stage != "Uncertain" else 0
-        else:
-            # If the stage remains the same and isn't "Uncertain", increment confidence
-            if self.current_stage != "Uncertain":
-                self.stage_confidence += 1
+        # 2. Detect top-5 emotions
+        emotion_results = self.emotion_detector.detect_emotion(text, top_n=5)
+        top5_emotions = emotion_results["top_emotions"]  # e.g. [{"label": "...", "score":0.3}, ...]
+        print("Top-5 Emotions:", top5_emotions)
 
-        # 3. Generate short response from the LLaMA model
-        bot_response = self.generate_response(text)
+        # Convert them to a stage distribution for this single line
+        line_distribution = self.stage_mapper.get_stage_distribution(top5_emotions)
+        print("Line Distribution:", line_distribution)
 
-        # 4. If the stage_confidence exceeds threshold, we can produce concluding feedback
-        if self.current_stage != "Uncertain" and self.stage_confidence >= self.stage_confidence_threshold:
-            stage_feedback = self.stage_mapper.get_feedback_for_stage(self.current_stage)
-            return bot_response, self.current_stage, stage_feedback
-        else:
-            return bot_response, None, None
+        # 3. Load the existing distribution from the DB, update it, then save
+        accum_dist = team.load_accum_distrib()  # returns a dict of stage->float
+        if not accum_dist:  # If empty, init with 0.0 for each stage
+            accum_dist = {stg: 0.0 for stg in self.stage_mapper.stage_emotion_map.keys()}
 
-    def interactive_chat(self):
+        for stg, val in line_distribution.items():
+            accum_dist[stg] = accum_dist.get(stg, 0.0) + val
+
+        team.num_lines += 1
+        team.save_accum_distrib(accum_dist)
+        db.commit()
+
+        final_stage = None
+        stage_feedback = None
+
+        # 4. If we have >= 3 lines, check if any stage sum > 0.7
+        print(team.num_lines)
+        if team.num_lines >= 3:
+            # Find the stage with the highest sum
+            best_stage = None
+            best_sum = 0.0
+            for stg, total_val in accum_dist.items():
+                if total_val > best_sum:
+                    best_sum = total_val
+                    best_stage = stg
+
+            print("Best stage sum:", best_sum, "Stage:", best_stage)
+            if best_sum > 0.7:
+                final_stage = best_stage
+                stage_feedback = self.stage_mapper.get_feedback_for_stage(best_stage)
+                team.current_stage = best_stage
+                db.commit()
+
+        # Build conversation string from existing messages
+        messages = db.query(Message).filter(Message.team_id == team.id).order_by(Message.id).all()
+        lines_for_prompt = []
+        for msg in messages:
+            if msg.role.lower() == "assistant":
+                lines_for_prompt.append(f"Assistant: {msg.text}")
+            else:
+                lines_for_prompt.append(f"User: {msg.text}")
+        conversation_str = "\n".join(lines_for_prompt)
+
+        # 5. Generate assistant response
+        bot_response = self._generate_response(conversation_str, text)
+
+        assistant_msg = Message(
+            team_id=team.id,
+            role="Assistant",
+            text=bot_response,
+            detected_emotion="(multiple top-5 used)",
+            stage_at_time=final_stage if final_stage else "Uncertain"
+        )
+        db.add(assistant_msg)
+        db.commit()
+
+        return bot_response, final_stage, stage_feedback
+
+    def analyze_conversation_db(self, db, team_name: str, lines: list):
         """
-        Holds a conversation with a person line by line,
-        continuing until the user says 'exit' or we reach stage confidence.
-        """
-        print("Chatbot is ready! Type 'exit' to quit. We'll keep going until we confirm a stage or you stop.")
-        while True:
-            user_input = input("You: ")
-            if user_input.lower() == "exit":
-                print("Goodbye!")
-                break
-
-            bot_msg, final_stage, feedback = self.process_line(user_input)
-            print("Bot:", bot_msg)
-            if final_stage:
-                print(f"[Stage Conclusion: {final_stage}]")
-                print("Bot (Stage Feedback):", feedback)
-                # After concluding, you could break or let the user continue
-                # but typically you'd break since we have a conclusion
-                break
-
-    def analyze_conversation(self, lines):
-        """
-        Analyzes a list of lines (strings) as if they're a conversation.
-        Returns the final stage and stage feedback once confident or end of lines.
+        Multi-line approach: pass a list of user lines in bulk.
+        We'll feed them one by one to process_line with the new accumulation logic.
+        If we finalize stage early, we stop. If not, we get no final stage after all lines.
         """
         final_stage = None
         feedback = None
+
         for line in lines:
-            bot_msg, concluded_stage, concluded_feedback = self.process_line(line)
-            # We won't do line-by-line prints here, but you can log them if you want
+            bot_msg, concluded_stage, concluded_feedback = self.process_line(db, team_name, line)
             if concluded_stage:
                 final_stage = concluded_stage
                 feedback = concluded_feedback
-                break  # We can stop analyzing once we have confidence
+                break
         return final_stage, feedback
 
-    def reset_conversation(self):
+    def reset_team(self, db, team_name: str):
         """
-        Reset the conversation state for a new session or new analysis.
+        Clear the ephemeral distribution logic plus DB messages.
         """
-        self.chat_history = []
-        self.current_stage = None
-        self.stage_confidence = 0
+        team = db.query(Team).filter(Team.name == team_name).first()
+        if team:
+            team.current_stage = "Uncertain"
+            team.stage_confidence = 0.0
+            # Remove ephemeral accum_distrib
+            if hasattr(team, "accum_distrib"):
+                delattr(team, "accum_distrib")
+            if hasattr(team, "num_lines"):
+                delattr(team, "num_lines")
 
+            # Clear messages
+            db.query(Message).filter(Message.team_id == team.id).delete()
+            db.commit()
