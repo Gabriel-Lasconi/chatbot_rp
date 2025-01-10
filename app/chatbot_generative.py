@@ -1,7 +1,7 @@
 from langchain_ollama import OllamaLLM
 from app.emotion_analysis import EmotionDetector
 from app.stage_mapping import StageMapper
-from app.db import SessionLocal, Team, Message
+from app.db import Team, Message
 
 class ChatbotGenerative:
     def __init__(self):
