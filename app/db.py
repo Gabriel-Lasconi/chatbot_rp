@@ -4,7 +4,7 @@ import json
 from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 
-DATABASE_URL = "sqlite:///./chatbot.db"
+DATABASE_URL = "sqlite:///./teams.db"
 
 engine = create_engine(DATABASE_URL, echo=False)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

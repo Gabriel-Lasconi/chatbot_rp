@@ -1,110 +1,168 @@
 /* General styling */
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #f0f2f5;
-        }
-        #chatbox {
-            width: 400px;
-            height: 600px;
-            border-radius: 15px;
-            background: white;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        #header {
-            background: #4a90e2;
-            color: white;
-            text-align: center;
-            padding: 15px;
-            font-size: 18px;
-            border-top-left-radius: 15px;
-            border-top-right-radius: 15px;
-        }
-        #conversation {
-            flex: 1;
-            padding: 10px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .bubble {
-            padding: 10px 15px;
-            border-radius: 20px;
-            font-size: 14px;
-            max-width: 70%;
-            animation: fadeIn 0.3s ease-in-out;
-        }
-        .user {
-            background: #e0f7fa;
-            align-self: flex-end;
-        }
-        .bot {
-            background: #f1f0f0;
-            align-self: flex-start;
-        }
-        #input-box {
-            display: flex;
-            padding: 10px;
-            border-top: 1px solid #ccc;
-            align-items: center;
-        }
-        #userInput {
-            flex: 1;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 20px;
-            font-size: 16px;
-            outline: none;
-        }
-        button {
-            background: #4a90e2;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            font-size: 16px;
-            border-radius: 20px;
-            margin-left: 10px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        button:hover {
-            background-color: #357ab8;
-        }
-        /* Animations */
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        #avatar {
-            display: flex;
-            justify-content: center;
-            margin-bottom: 10px;
-        }
-        #avatar img {
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            animation: bounce 1.5s infinite;
-        }
-        @keyframes bounce {
-            0%, 100% {
-                transform: translateY(0);
-            }
-            50% {
-                transform: translateY(-10px);
-            }
-        }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #f0f2f5;
+    }
+    #chatbox {
+      width: 400px;
+      height: 740px; /* increased for toggles */
+      border-radius: 15px;
+      background: white;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    #header {
+      background: #4a90e2;
+      color: white;
+      text-align: center;
+      padding: 15px;
+      font-size: 18px;
+      border-top-left-radius: 15px;
+      border-top-right-radius: 15px;
+    }
+    #modeToggle {
+      display: flex;
+      justify-content: space-around;
+      padding: 8px;
+      border-bottom: 1px solid #ccc;
+    }
+    .mode-btn {
+      flex: 1;
+      margin: 0 5px;
+      padding: 8px;
+      border: none;
+      border-radius: 15px;
+      background: #4a90e2;
+      color: white;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .mode-btn:hover {
+      background-color: #357ab8;
+    }
+    #avatar {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+    #avatar img {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      animation: bounce 1.5s infinite;
+    }
+    @keyframes bounce {
+      0%, 100% {
+        transform: translateY(0);
+      }
+      50% {
+        transform: translateY(-10px);
+      }
+    }
+    #conversation {
+      flex: 1;
+      padding: 10px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .bubble {
+      padding: 10px 15px;
+      border-radius: 20px;
+      font-size: 14px;
+      max-width: 70%;
+      animation: fadeIn 0.3s ease-in-out;
+    }
+    .user {
+      background: #e0f7fa;
+      align-self: flex-end;
+    }
+    .bot {
+      background: #f1f0f0;
+      align-self: flex-start;
+    }
+    #input-box {
+      display: flex;
+      flex-direction: column;
+      border-top: 1px solid #ccc;
+      padding: 10px;
+    }
+    #teamContainer {
+      display: flex;
+      margin-bottom: 10px;
+    }
+    #teamName {
+      flex: 1;
+      padding: 8px;
+      margin-right: 10px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 20px;
+      outline: none;
+    }
+    #conversationMode, #analysisMode {
+      margin-bottom: 10px;
+    }
+    #conversationMode, #analysisMode label {
+      font-size: 14px;
+    }
+    #conversationInput {
+      display: flex;
+      margin-bottom: 10px;
+    }
+    #userInput {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 20px;
+      font-size: 16px;
+      outline: none;
+    }
+    button {
+      background: #4a90e2;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 20px;
+      margin-left: 10px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #357ab8;
+    }
+    .analysis-section {
+      display: flex;
+      flex-direction: column;
+    }
+    #analysisInput {
+      width: 100%;
+      height: 80px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
+      padding: 8px;
+      resize: vertical;
+    }
+    .hidden {
+      display: none !important;
+    }
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }

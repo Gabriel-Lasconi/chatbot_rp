@@ -1,3 +1,33 @@
+/**
+ * Switch to Conversation Mode
+ * - Show conversation inputs, hide analysis
+ * - Reset teamName and other fields
+ */
+function activateConversationMode() {
+  // Clear existing UI
+  document.getElementById("analysisMode").classList.add("hidden");
+  document.getElementById("conversationMode").classList.remove("hidden");
+  document.getElementById("teamName").value = "";
+  document.getElementById("analysisInput").value = "";
+  document.getElementById("userInput").value = "";
+}
+
+/**
+ * Switch to Analysis Mode
+ * - Show the analysis textarea, hide conversation line input
+ * - Reset teamName and other fields
+ */
+function activateAnalysisMode() {
+  document.getElementById("conversationMode").classList.add("hidden");
+  document.getElementById("analysisMode").classList.remove("hidden");
+  document.getElementById("teamName").value = "";
+  document.getElementById("analysisInput").value = "";
+  document.getElementById("userInput").value = "";
+}
+
+/**
+ * Send a single line to conversation endpoint
+ */
 async function sendMessage() {
   const teamNameElem = document.getElementById("teamName");
   const userInputElem = document.getElementById("userInput");
@@ -19,14 +49,13 @@ async function sendMessage() {
   conversationElem.innerHTML += `<div class="bubble user">${userMsg}</div>`;
   conversationElem.scrollTop = conversationElem.scrollHeight;
 
-  // Prepare payload
+  // Prepare payload for conversation mode
   const payload = {
     text: userMsg,
     team_name: teamName
   };
 
   try {
-    // Call the conversation mode endpoint
     const response = await fetch("http://127.0.0.1:8000/chat", {
       method: "POST",
       headers: {
@@ -59,6 +88,9 @@ async function sendMessage() {
   userInputElem.value = "";
 }
 
+/**
+ * Analyze multiple lines in one call
+ */
 async function analyzeConversation() {
   const teamNameElem = document.getElementById("teamName");
   const analysisInputElem = document.getElementById("analysisInput");
@@ -90,7 +122,6 @@ async function analyzeConversation() {
   };
 
   try {
-    // POST to /analyze
     const response = await fetch("http://127.0.0.1:8000/analyze", {
       method: "POST",
       headers: {
@@ -107,13 +138,13 @@ async function analyzeConversation() {
     const finalStage = data.final_stage || "Uncertain";
     const feedback = data.feedback || "";
 
-    // We might want to display in conversation
-    conversationElem.innerHTML += `<div class="bubble user" style="font-style:italic;">(Analyzed ${lines.length} lines)</div>`;
+    // Show user that analysis is done
+    conversationElem.innerHTML += `<div class="bubble user" style="font-style:italic;">(Analyzed ${lines.length} lines for team: ${teamName})</div>`;
 
     if (finalStage !== "Uncertain") {
       conversationElem.innerHTML += `<div class="bubble bot"><strong>Final Stage:</strong> ${finalStage}<br><strong>Feedback:</strong> ${feedback}</div>`;
     } else {
-      conversationElem.innerHTML += `<div class="bubble bot">No definitive stage concluded from these lines (still uncertain).</div>`;
+      conversationElem.innerHTML += `<div class="bubble bot">No definitive stage concluded (still uncertain).</div>`;
     }
     conversationElem.scrollTop = conversationElem.scrollHeight;
   } catch (error) {
@@ -121,6 +152,6 @@ async function analyzeConversation() {
     alert(error.message);
   }
 
-  // Optionally clear the input
+  // Optionally clear the analysis input
   analysisInputElem.value = "";
 }

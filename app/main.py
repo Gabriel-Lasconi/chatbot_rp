@@ -49,7 +49,6 @@ def analyze_conversation(req: AnalyzeRequest, db: Session = Depends(get_db)):
         "feedback": feedback if feedback else ""
     }
 
-# Initialize the chatbot (no ephemeral memory inside it now)
 chatbot = ChatbotGenerative()
 
 class Message(BaseModel):
