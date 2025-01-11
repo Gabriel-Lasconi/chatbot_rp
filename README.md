@@ -11,31 +11,24 @@ This project is a chatbot developed during my Bachelor research project at the U
 ```
 app/
     __init__.py
-    chatbot.py
+    chatbot_generative.py
+    db.py
     emotion_analysis.py
     main.py
-    preprocess.py
     stage_mapping.py
-    chat_logs.json
+    teams.db
+chatbot_llama/
 tests/
-    test_chatbot.py
     test_emotion_analysis.py
-ui/
-    index.html
-    styles.css
-    app.js
+    test_emotion_analysis_scenario.py
+    test_scenarios_analysis_mode.py
+    test_stage_mapper.py
+index.html
+styles.css
+app.js
 requirements.txt
 README.md
 ```
-
-- **chatbot.py:** Basic chatbot logic that asks questions and handles user responses.
-- **emotion_analysis.py:** Identifies emotions from text.
-- **main.py:** Runs the application, provides endpoints.
-- **preprocess.py:** Cleans and prepares text before analysis.
-- **stage_mapping.py:** Maps emotions to Tuckman’s stages and gives feedback based on that.
-- **chat_logs.json:** Stores conversation logs if enabled.
-- **tests/:** Contains Python test files for verifying chatbot and emotion analysis logic.
-- **ui/:** Contains a simple front-end interface to interact with the chatbot.
 
 ## How to Use
 
@@ -50,4 +43,4 @@ README.md
    ```
    
 3. **Interact with the Chatbot:**
-   Open your browser at `http://127.0.0.1:8000` and use the provided endpoints to send messages and reset conversations.
+   Open the browser at `http://127.0.0.1:8000` and interact with the chatbot.

@@ -37,9 +37,6 @@ def get_db():
     finally:
         db.close()
 
-# Mount static directory:
-# We go up one level from this "api" folder to serve the root folder as "static"
-# so that styles.css and app.js can be accessed at "/static/styles.css" and "/static/app.js"
 static_path = os.path.join(os.path.dirname(__file__), "..")
 app.mount("/static", StaticFiles(directory=static_path), name="static")
 

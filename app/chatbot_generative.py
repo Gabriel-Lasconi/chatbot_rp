@@ -12,26 +12,24 @@ class ChatbotGenerative:
         self.emotion_detector = EmotionDetector()
         self.stage_mapper = StageMapper()
 
-        # System instructions remain the same
         self.system_instructions = (
-            "You are a concise assistant analyzing a team's emotional climate "
-            "and mapping it to Tuckman's stages. Only ask short follow-up questions "
-            "Avoid lengthy elaborations or repeating instructions."
+            "You are a helpful assistant analyzing a team's emotional climate and mapping it to Tuckman's stages. "
+            "Always begin with a short, friendly greeting, then ask a simple question about the team's current situation or feelings."
+            "Try asking the person about his emotions, how he feels. "
+            "Keep your responses concise, ask only brief follow-up questions when you need more information, and avoid lengthy or random questions. "
+            "Do not repeat instructions or disclaimers. If you have enough context to identify a stage, provide short, stage-specific feedback; "
+            "otherwise, gather more relevant details with minimal elaboration. "
+            "Focus on emotional cues and team dynamics, and maintain a polite, clear, and context-aware dialogue."
         )
 
-        # We'll store partial distributions for multiple messages in memory.
-        # Once we have at least 3 messages, we see if any stage's sum > 0.7
-        # We'll also keep track in the DB the team's current stage, but it
-        # won't finalize until the distribution surpasses 70%.
-        # This approach ensures multi-message accumulation.
-        #
-        # For demonstration, we accumulate ephemeral data here. In a real system,
-        # you might store partial distributions in the DB too.
+        # Dictionary to track how many new lines have arrived
+        # since the last final stage was found, for each team_name.
+        # This is ephemeral: if the server restarts, these counters reset.
+        self.lines_since_final_stage = {}  # e.g. { team_name: int }
 
     def _load_team_state(self, db, team_name: str):
         """
         Retrieve or create a Team record by name. Returns the Team ORM object.
-        If you want to track partial distributions in DB, you'd adapt this approach.
         """
         team = db.query(Team).filter(Team.name == team_name).first()
         if not team:
@@ -57,65 +55,83 @@ class ChatbotGenerative:
 
     def process_line(self, db, team_name: str, text: str):
         """
-        1. Insert user message -> DB
-        2. Use top-5 emotions -> compute stage distribution from that line
-        3. Accumulate distribution in the team's DB columns accum_distribution + num_lines
-        4. If we have >= 3 lines and a stage sum > 0.7, finalize that stage
-        5. Generate an assistant response
-        6. If we finalize stage, store it in DB
+        Main approach:
+          1. Insert user message into DB.
+          2. Detect top-5 emotions -> get normalized distribution for this line.
+          3. Accumulate distribution in DB's accum_distribution, also normalized.
+          4. If we have >= 3 total lines for this team, see if any stage > 0.7. If so, store that stage.
+          5. But do not produce final stage feedback if we haven't had at least 3 new lines since last finalization.
+          6. Generate an assistant response, store it, and possibly produce feedback.
         """
-        # 1. Load or create team
         team = self._load_team_state(db, team_name)
 
-        # Insert the user message
+        # Insert the user message into DB
         user_msg = Message(team_id=team.id, role="User", text=text)
         db.add(user_msg)
         db.commit()
         db.refresh(user_msg)
 
-        # 2. Detect top-5 emotions
+        # Detect top-5 emotions
         emotion_results = self.emotion_detector.detect_emotion(text, top_n=5)
-        top5_emotions = emotion_results["top_emotions"]  # e.g. [{"label": "...", "score":0.3}, ...]
+        top5_emotions = emotion_results["top_emotions"]
         print("Top-5 Emotions:", top5_emotions)
 
-        # Convert them to a stage distribution for this single line
+        # Convert them to a distribution
         line_distribution = self.stage_mapper.get_stage_distribution(top5_emotions)
         print("Line Distribution:", line_distribution)
 
-        # 3. Load the existing distribution from the DB, update it, then save
-        accum_dist = team.load_accum_distrib()  # returns a dict of stage->float
-        if not accum_dist:  # If empty, init with 0.0 for each stage
+        # Load the existing distribution from the DB
+        accum_dist = team.load_accum_distrib()
+        if not accum_dist:
             accum_dist = {stg: 0.0 for stg in self.stage_mapper.stage_emotion_map.keys()}
 
+        # Add the line's distribution, then re-normalize
         for stg, val in line_distribution.items():
-            accum_dist[stg] = accum_dist.get(stg, 0.0) + val
+            accum_dist[stg] += val
+        total_sum = sum(accum_dist.values())
+        if total_sum > 0:
+            for stg in accum_dist:
+                accum_dist[stg] = accum_dist[stg] / total_sum
 
+        # Save the updated distribution + increment lines
         team.num_lines += 1
         team.save_accum_distrib(accum_dist)
         db.commit()
 
+        # lines_since_final_stage ephemeral logic
+        # If we have no entry yet, initialize to 0
+        if team_name not in self.lines_since_final_stage:
+            self.lines_since_final_stage[team_name] = 0
+
+        self.lines_since_final_stage[team_name] += 1
+
+        # Decide if we can finalize a stage or not
         final_stage = None
         stage_feedback = None
 
-        # 4. If we have >= 3 lines, check if any stage sum > 0.7
-        print(team.num_lines)
+        # Only if we have >= 3 total lines in DB, let's see if any stage is > 0.5
         if team.num_lines >= 3:
-            # Find the stage with the highest sum
-            best_stage = None
-            best_sum = 0.0
-            for stg, total_val in accum_dist.items():
-                if total_val > best_sum:
-                    best_sum = total_val
+            best_stage, best_sum = None, 0.0
+            for stg, val in accum_dist.items():
+                if val > best_sum:
+                    best_sum = val
                     best_stage = stg
 
             print("Best stage sum:", best_sum, "Stage:", best_stage)
-            if best_sum > 0.7:
-                final_stage = best_stage
-                stage_feedback = self.stage_mapper.get_feedback_for_stage(best_stage)
+
+            if best_sum > 0.5:
+                # Store that stage in DB
                 team.current_stage = best_stage
                 db.commit()
+                # Only produce feedback if we have at least 5 new lines
+                # since last final stage conclusion
+                if self.lines_since_final_stage[team_name] >= 5:
+                    final_stage = best_stage
+                    stage_feedback = self.stage_mapper.get_feedback_for_stage(best_stage)
+                    # reset ephemeral lines_since_final_stage
+                    self.lines_since_final_stage[team_name] = 0
 
-        # Build conversation string from existing messages
+        # Build conversation string from all messages
         messages = db.query(Message).filter(Message.team_id == team.id).order_by(Message.id).all()
         lines_for_prompt = []
         for msg in messages:
@@ -125,7 +141,7 @@ class ChatbotGenerative:
                 lines_for_prompt.append(f"User: {msg.text}")
         conversation_str = "\n".join(lines_for_prompt)
 
-        # 5. Generate assistant response
+        # Generate assistant response
         bot_response = self._generate_response(conversation_str, text)
 
         assistant_msg = Message(
@@ -140,10 +156,11 @@ class ChatbotGenerative:
 
         return bot_response, final_stage, stage_feedback
 
+
     def analyze_conversation_db(self, db, team_name: str, lines: list):
         """
         Multi-line approach: pass a list of user lines in bulk.
-        We'll feed them one by one to process_line with the new accumulation logic.
+        We'll feed them one by one to process_line with the new distribution logic.
         If we finalize stage early, we stop. If not, we get no final stage after all lines.
         """
         final_stage = None
@@ -154,23 +171,25 @@ class ChatbotGenerative:
             if concluded_stage:
                 final_stage = concluded_stage
                 feedback = concluded_feedback
+                # we break once a stage is concluded
                 break
         return final_stage, feedback
 
     def reset_team(self, db, team_name: str):
         """
-        Clear the ephemeral distribution logic plus DB messages.
+        Clears distribution logic plus DB messages. Also resets ephemeral line counters.
         """
         team = db.query(Team).filter(Team.name == team_name).first()
         if team:
             team.current_stage = "Uncertain"
             team.stage_confidence = 0.0
-            # Remove ephemeral accum_distrib
-            if hasattr(team, "accum_distrib"):
-                delattr(team, "accum_distrib")
-            if hasattr(team, "num_lines"):
-                delattr(team, "num_lines")
-
-            # Clear messages
             db.query(Message).filter(Message.team_id == team.id).delete()
+            # also reset distribution
+            dist_reset = {stg: 0.0 for stg in self.stage_mapper.stage_emotion_map.keys()}
+            team.save_accum_distrib(dist_reset)
+            team.num_lines = 0
             db.commit()
+
+        # reset ephemeral lines_since_final_stage
+        if team_name in self.lines_since_final_stage:
+            del self.lines_since_final_stage[team_name]
