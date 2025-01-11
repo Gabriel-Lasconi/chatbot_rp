@@ -2,45 +2,264 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Team Chatbot</title>
   <link rel="stylesheet" href="/static/styles.css" />
+  <style>
+    /* General styling */
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f0f2f5;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    #appContainer {
+      display: flex;
+      flex-direction: row;
+      width: 80%;
+      max-width: 1200px;
+      height: 90%;
+      box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+      border-radius: 10px;
+      background: white;
+      overflow: hidden;
+    }
+
+    #chatColumn, #stageColumn {
+      display: flex;
+      flex-direction: column;
+      background: white;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    #chatColumn {
+      flex: 2;
+    }
+
+    #header, #stageHeader {
+      background: #4a90e2;
+      color: white;
+      text-align: center;
+      padding: 20px;
+      font-size: 20px;
+      font-weight: bold;
+      border-bottom: 2px solid #357ab8;
+    }
+
+    #modeToggle {
+      display: flex;
+      justify-content: space-evenly;
+      padding: 10px;
+      border-bottom: 1px solid #ccc;
+      background-color: #f7f7f7;
+    }
+
+    .mode-btn {
+      flex: 1;
+      margin: 0 5px;
+      padding: 10px;
+      border: none;
+      border-radius: 20px;
+      background: #4a90e2;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .mode-btn:hover {
+      background-color: #357ab8;
+    }
+
+    #avatar {
+      display: flex;
+      justify-content: center;
+      margin: 20px 0;
+    }
+
+    #avatar img {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      border: 2px solid #ccc;
+    }
+
+    #conversation {
+      flex: 1;
+      padding: 10px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: #f9f9f9;
+    }
+
+    .bubble {
+      padding: 12px 18px;
+      border-radius: 20px;
+      font-size: 14px;
+      max-width: 70%;
+    }
+
+    .user {
+      background: #e0f7fa;
+      align-self: flex-end;
+    }
+
+    .bot {
+      background: #f1f0f0;
+      align-self: flex-start;
+    }
+
+    #input-box {
+      padding: 15px;
+      border-top: 1px solid #ccc;
+      background: #ffffff;
+    }
+
+    #teamContainer {
+      display: flex;
+      margin-bottom: 10px;
+    }
+
+    #teamName {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 20px;
+      outline: none;
+      font-size: 14px;
+    }
+
+    #conversationInput {
+      display: flex;
+      margin-top: 10px;
+    }
+
+    #userInput {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 20px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    button {
+      background: #4a90e2;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 14px;
+      border-radius: 20px;
+      margin-left: 10px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #357ab8;
+    }
+
+    #stageColumn {
+      flex: 1;
+      background: #ffffff;
+      border-left: 1px solid #ccc;
+    }
+
+    #stageBars {
+      padding: 20px;
+    }
+
+    .stageBarContainer {
+      margin: 10px 0;
+    }
+
+    .stageLabel {
+      font-size: 14px;
+      margin-right: 5px;
+      display: inline-block;
+      width: 80px;
+    }
+
+    .stageBar {
+      display: inline-block;
+      height: 12px;
+      background-color: #4a90e2;
+      border-radius: 5px;
+    }
+
+    #finalStageInfo {
+      padding: 10px;
+      border-top: 1px solid #ccc;
+      background: #ffffff;
+      border-radius: 0 0 10px 10px;
+      margin-top: auto;
+    }
+
+    #finalStageInfo h3 {
+      margin: 0 0 5px;
+      font-size: 16px;
+    }
+
+    #finalStageInfo p {
+      margin: 0;
+      font-size: 14px;
+      color: #555;
+    }
+  </style>
 </head>
 <body>
-<div id="chatbox">
-  <div id="header">Team Chatbot</div>
-  <div id="modeToggle">
-    <button class="mode-btn" id="convBtn" onclick="switchToConversationMode()">Conversation Mode</button>
-    <button class="mode-btn" id="analBtn" onclick="switchToAnalysisMode()">Analysis Mode</button>
-  </div>
+<div id="appContainer">
+  <div id="chatColumn">
+    <div id="header">Team Chatbot - Marco</div>
 
-  <div id="avatar">
-    <img src="https://cdn-icons-png.flaticon.com/512/149/149071.png" alt="Chatbot Avatar">
-  </div>
-
-  <div id="conversation"></div>
-
-  <div id="input-box">
-    <!-- Team Name Input (always shown, but reset on mode toggle) -->
-    <div id="teamContainer">
-      <input type="text" id="teamName" placeholder="Enter Team Name..." />
+    <div id="modeToggle">
+      <button class="mode-btn" id="convBtn" onclick="switchToConversationMode()">Conversation Mode</button>
+      <button class="mode-btn" id="analBtn" onclick="switchToAnalysisMode()">Analysis Mode</button>
     </div>
 
-    <!-- Conversation Mode Inputs -->
-    <div id="conversationMode">
-      <div id="conversationInput">
-        <input type="text" id="userInput" placeholder="Type your message here..." />
-        <button onclick="sendMessage()">Send</button>
+    <div id="avatar">
+      <img src="avatar.png" alt="Chatbot Avatar" />
+    </div>
+
+    <div id="conversation"></div>
+
+    <div id="input-box">
+      <div id="teamContainer">
+        <input type="text" id="teamName" placeholder="Enter Team Name..." onblur="autoLoadTeamInfo()" />
+      </div>
+
+      <div id="conversationMode">
+        <div id="conversationInput">
+          <input type="text" id="userInput" placeholder="Type your message here..." />
+          <button onclick="sendMessage()">Send</button>
+        </div>
+      </div>
+
+      <div id="analysisMode" class="hidden">
+        <label for="analysisInput">Paste multiple lines for analysis (one per line):</label>
+        <textarea id="analysisInput" placeholder="Enter your lines here..."></textarea>
+        <button onclick="analyzeConversation()">Analyze</button>
       </div>
     </div>
+  </div>
 
-    <!-- Analysis Mode Inputs -->
-    <div id="analysisMode" class="hidden">
-      <label for="analysisInput" style="margin-bottom:4px;">
-        Paste multiple lines for analysis (one per line):
-      </label>
-      <textarea id="analysisInput" placeholder="Enter your lines here..." ></textarea>
-      <button style="margin-top: 8px;" onclick="analyzeConversation()">Analyze</button>
+  <div id="stageColumn">
+    <div id="stageHeader">Stage Distribution</div>
+
+    <div id="stageBars">
+      <!-- Dynamically filled -->
+    </div>
+
+    <div id="finalStageInfo">
+      <h3>Current Stage: <span id="finalStageSpan">Uncertain</span></h3>
+      <p id="stageFeedback"></p>
     </div>
   </div>
 </div>
