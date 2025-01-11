@@ -1,10 +1,15 @@
 /**
- * Switch to Conversation Mode
- * - Show conversation inputs, hide analysis
- * - Reset teamName and other fields
+ * Switch to Conversation Mode with confirmation.
+ * If the user confirms, we clear the conversation and reset fields.
  */
-function activateConversationMode() {
-  // Clear existing UI
+function switchToConversationMode() {
+  const confirmed = confirm("Switch to conversation mode? This will erase the current chat history. Continue?");
+  if (!confirmed) {
+    // User clicked "No", do nothing
+    return;
+  }
+  // User clicked "Yes", so proceed
+  clearConversation();
   document.getElementById("analysisMode").classList.add("hidden");
   document.getElementById("conversationMode").classList.remove("hidden");
   document.getElementById("teamName").value = "";
@@ -13,16 +18,30 @@ function activateConversationMode() {
 }
 
 /**
- * Switch to Analysis Mode
- * - Show the analysis textarea, hide conversation line input
- * - Reset teamName and other fields
+ * Switch to Analysis Mode with confirmation.
+ * If the user confirms, we clear the conversation and reset fields.
  */
-function activateAnalysisMode() {
+function switchToAnalysisMode() {
+  const confirmed = confirm("Switch to analysis mode? This will erase the current chat history. Continue?");
+  if (!confirmed) {
+    // User clicked "No", do nothing
+    return;
+  }
+  // User clicked "Yes", so proceed
+  clearConversation();
   document.getElementById("conversationMode").classList.add("hidden");
   document.getElementById("analysisMode").classList.remove("hidden");
   document.getElementById("teamName").value = "";
   document.getElementById("analysisInput").value = "";
   document.getElementById("userInput").value = "";
+}
+
+/**
+ * Clear the chat conversation bubble area.
+ */
+function clearConversation() {
+  const conversationElem = document.getElementById("conversation");
+  conversationElem.innerHTML = "";
 }
 
 /**

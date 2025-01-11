@@ -10,8 +10,8 @@
 <div id="chatbox">
   <div id="header">Team Chatbot</div>
   <div id="modeToggle">
-    <button class="mode-btn" id="convBtn" onclick="activateConversationMode()">Conversation Mode</button>
-    <button class="mode-btn" id="analBtn" onclick="activateAnalysisMode()">Analysis Mode</button>
+    <button class="mode-btn" id="convBtn" onclick="switchToConversationMode()">Conversation Mode</button>
+    <button class="mode-btn" id="analBtn" onclick="switchToAnalysisMode()">Analysis Mode</button>
   </div>
 
   <div id="avatar">
@@ -26,6 +26,7 @@
       <input type="text" id="teamName" placeholder="Enter Team Name..." />
     </div>
 
+    <!-- Conversation Mode Inputs -->
     <div id="conversationMode">
       <div id="conversationInput">
         <input type="text" id="userInput" placeholder="Type your message here..." />
@@ -33,6 +34,7 @@
       </div>
     </div>
 
+    <!-- Analysis Mode Inputs -->
     <div id="analysisMode" class="hidden">
       <label for="analysisInput" style="margin-bottom:4px;">
         Paste multiple lines for analysis (one per line):
