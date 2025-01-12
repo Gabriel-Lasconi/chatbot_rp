@@ -6,12 +6,13 @@
   <title>Team Chatbot</title>
   <link rel="stylesheet" href="/static/styles.css" />
   <style>
-    /* General styling */
+    /* General Styling */
     body {
-      font-family: Arial, sans-serif;
+      font-family: 'Poppins', sans-serif;
       margin: 0;
       padding: 0;
-      background-color: #f0f2f5;
+      background-color: #f4f6fb;
+      color: #333;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -21,55 +22,47 @@
     #appContainer {
       display: flex;
       flex-direction: row;
-      width: 70%;
-      max-width: 1000px;
-      height: 80%;
-      box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
-      border-radius: 10px;
+      width: 80%;
+      max-width: 1200px;
+      height: 85%;
       background: white;
+      border-radius: 20px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
       overflow: hidden;
     }
 
-    #chatColumn, #stageColumn {
+    /* Chat Column */
+    #chatColumn {
+      flex: 3;
       display: flex;
       flex-direction: column;
-      background: white;
-      overflow: hidden;
+      background: #ffffff;
     }
-
-    #chatColumn {
-      flex: 2;
-    }
-
-    #header, #stageHeader {
+    #header {
       background: #4a90e2;
       color: white;
       text-align: center;
+      font-size: 22px;
+      font-weight: 700;
       padding: 20px;
-      font-size: 20px;
-      font-weight: bold;
-      border-bottom: 2px solid #357ab8;
     }
-
     #modeToggle {
       display: flex;
       justify-content: space-evenly;
       padding: 10px;
-      border-bottom: 1px solid #ccc;
-      background-color: #f7f7f7;
+      background-color: #eef1f7;
+      border-bottom: 1px solid #dce1ed;
     }
 
     .mode-btn {
-      flex: 1;
-      margin: 0 5px;
-      padding: 10px;
+      padding: 10px 20px;
       border: none;
       border-radius: 20px;
       background: #4a90e2;
       color: white;
       font-size: 16px;
       cursor: pointer;
-      text-align: center;
+      transition: background-color 0.3s ease;
     }
 
     .mode-btn:hover {
@@ -77,139 +70,184 @@
     }
 
     #avatar {
-      display: flex;
-      justify-content: center;
-      margin: 10px 0;
+      text-align: center;
+      padding: 20px 0;
     }
 
     #avatar img {
-      width: 80px;
-      height: 80px;
+      width: 100px;
+      height: 100px;
       border-radius: 50%;
-      border: 2px solid #ccc;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
     }
 
     #conversation {
       flex: 1;
-      padding: 10px;
+      padding: 20px;
       overflow-y: auto;
+      background: #f8fafc;
       display: flex;
       flex-direction: column;
-      gap: 10px;
-      background: #f9f9f9;
+      gap: 15px;
     }
 
     .bubble {
-      padding: 12px 18px;
+      padding: 15px 20px;
       border-radius: 20px;
       font-size: 14px;
       max-width: 70%;
     }
 
     .user {
-      background: #e0f7fa;
+      background: #e3f8fe;
       align-self: flex-end;
     }
 
     .bot {
-      background: #f1f0f0;
+      background: #f4f5f7;
       align-self: flex-start;
     }
 
     #input-box {
-      padding: 15px;
-      border-top: 1px solid #ccc;
+      padding: 20px;
       background: #ffffff;
+      border-top: 1px solid #dce1ed;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
     }
 
     #teamContainer {
       display: flex;
-      margin-bottom: 10px;
+      gap: 10px;
     }
 
     #teamName {
       flex: 1;
       padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 20px;
-      outline: none;
       font-size: 14px;
+      border: 1px solid #dce1ed;
+      border-radius: 10px;
+      outline: none;
+      background: #f9f9f9;
     }
 
-    #conversationInput {
+    #conversationInput, #analysisMode {
       display: flex;
-      margin-top: 10px;
+      gap: 10px;
     }
 
-    #userInput {
+    #userInput, #analysisInput {
       flex: 1;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 20px;
+      padding: 15px;
       font-size: 14px;
-      outline: none;
+      border: 1px solid #dce1ed;
+      border-radius: 10px;
+      background: #f9f9f9;
+      resize: none;
     }
 
     button {
+      padding: 12px 20px;
       background: #4a90e2;
       color: white;
       border: none;
-      padding: 10px 20px;
-      font-size: 14px;
-      border-radius: 20px;
-      margin-left: 10px;
+      border-radius: 10px;
+      font-size: 16px;
       cursor: pointer;
+      transition: background-color 0.3s ease;
     }
-
     button:hover {
       background-color: #357ab8;
     }
 
+    .hidden {
+      display: none !important;
+    }
+    /* Stage Column */
     #stageColumn {
-      flex: 1;
+      flex: 2;
+      display: flex;
+      flex-direction: column;
       background: #ffffff;
-      border-left: 1px solid #ccc;
+      border-left: 1px solid #dce1ed;
+    }
+
+    #stageHeader {
+      background: #4a90e2;
+      color: white;
+      text-align: center;
+      padding: 20px;
+      font-size: 22px;
+      font-weight: 700;
     }
 
     #stageBars {
       padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
     }
 
     .stageBarContainer {
-      margin: 10px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
 
     .stageLabel {
+      width: 90px;
       font-size: 14px;
-      margin-right: 5px;
-      display: inline-block;
-      width: 80px;
+      font-weight: 600;
+    }
+    .stageBar {
+      flex: 1;
+      height: 15px;
+      border-radius: 10px;
+      background: #eef2f9; /* Background for empty bar */
+      overflow: hidden;
+      position: relative;
+    }
+    .stageBarFill {
+      height: 100%;
+      border-radius: 10px;
+      background: #4a90e2; /* Fill color */
+      transition: width 0.5s ease;
+    }
+    .stageBar::after {
+      content: '';
+      display: block;
+      height: 100%;
+      border-radius: 10px;
+      background: #4a90e2;
+      width: 0;
+      transition: width 0.5s ease;
     }
 
-    .stageBar {
-      display: inline-block;
-      height: 12px;
-      background-color: #4a90e2;
-      border-radius: 5px;
+    .stagePercentage {
+      font-size: 14px;
+      font-weight: 600;
+      color: #555;
     }
 
     #finalStageInfo {
-      padding: 10px;
-      border-top: 1px solid #ccc;
-      background: #ffffff;
-      border-radius: 0 0 10px 10px;
-      margin-top: auto;
+      padding: 20px;
+      border-top: 1px solid #dce1ed;
+      background: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
 
     #finalStageInfo h3 {
-      margin: 0 0 5px;
-      font-size: 16px;
+      font-size: 18px;
+      margin: 0;
     }
 
     #finalStageInfo p {
-      margin: 0;
       font-size: 14px;
-      color: #555;
+      color: #666;
+      margin: 0;
     }
   </style>
 </head>
@@ -242,8 +280,7 @@
       </div>
 
       <div id="analysisMode" class="hidden">
-        <label for="analysisInput">Paste multiple lines for analysis (one per line):</label>
-        <textarea id="analysisInput" placeholder="Enter your lines here..."></textarea>
+        <textarea id="analysisInput" placeholder="Paste multiple lines here... (each message on one line)"></textarea>
         <button onclick="analyzeConversation()">Analyze</button>
       </div>
     </div>
@@ -253,12 +290,12 @@
     <div id="stageHeader">Stage Distribution</div>
 
     <div id="stageBars">
-      <!-- Dynamically filled -->
+      <!-- Stage bars will be dynamically filled -->
     </div>
 
     <div id="finalStageInfo">
       <h3>Current Stage: <span id="finalStageSpan">Uncertain</span></h3>
-      <p id="stageFeedback"></p>
+      <p id="stageFeedback">No data available.</p>
     </div>
   </div>
 </div>

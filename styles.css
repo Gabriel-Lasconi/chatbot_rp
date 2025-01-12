@@ -1,32 +1,5 @@
 /* General styling */
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      background-color: #f0f2f5;
-    }
-    #chatbox {
-      width: 400px;
-      height: 740px; /* increased for toggles */
-      border-radius: 15px;
-      background: white;
-      display: flex;
-      flex-direction: column;
-      box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
-    }
-    #header {
-      background: #4a90e2;
-      color: white;
-      text-align: center;
-      padding: 15px;
-      font-size: 18px;
-      border-top-left-radius: 15px;
-      border-top-right-radius: 15px;
-    }
+
     #modeToggle {
       display: flex;
       justify-content: space-around;

@@ -45,34 +45,40 @@ function resetStageUI() {
   document.getElementById("stageFeedback").textContent = "";
 }
 
-function createStageBarHTML(stageName, percentage) {
-  const percStr = (percentage * 100).toFixed(1) + "%";
+function createStageBarHTML(stageName, normalizedValue, actualValue) {
+  const percStr = actualValue.toFixed(2) * 100 + "%";
   return `
-  <div class="stageBarContainer">
-    <span class="stageLabel">${stageName}:</span>
-    <div class="stageBar" style="width:${percentage * 100}%;"></div>
-    <span style="font-size:12px; margin-left:5px;">${percStr}</span>
-  </div>
+    <div class="stageBarContainer">
+      <span class="stageLabel">${stageName}:</span>
+      <div class="stageBar">
+        <div class="stageBarFill" style="width: ${normalizedValue * 100}%;"></div>
+      </div>
+      <span class="stagePercentage">${percStr}</span>
+    </div>
   `;
 }
 
 function updateStageUI(distribution, finalStage, feedback) {
-  // distribution = { Forming:0.2, Storming:0.5, Norming:0.1, ... }
-  // finalStage = "Storming" or "Uncertain"
-  // feedback = "some text" or ""
-
   const stageBarsElem = document.getElementById("stageBars");
   stageBarsElem.innerHTML = "";
+
   const stageOrder = ["Forming", "Storming", "Norming", "Performing", "Adjourning"];
 
+  // Find the maximum value in the distribution
+  const maxValue = Math.max(...stageOrder.map(stage => distribution[stage] || 0));
+
+  // Update the bars
   stageOrder.forEach(stageName => {
-    const val = distribution[stageName] || 0.0;
-    stageBarsElem.innerHTML += createStageBarHTML(stageName, val);
+    const value = distribution[stageName] || 0;
+    const normalizedValue = maxValue > 0 ? value / maxValue : 0; // Scale relative to the max value
+    stageBarsElem.innerHTML += createStageBarHTML(stageName, normalizedValue, value);
   });
 
+  // Update final stage and feedback
   document.getElementById("finalStageSpan").textContent = finalStage || "Uncertain";
   document.getElementById("stageFeedback").textContent = feedback || "";
 }
+
 
 /********************************************************
   AUTO LOAD TEAM INFO (onblur from teamName)
