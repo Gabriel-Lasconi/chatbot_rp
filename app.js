@@ -225,3 +225,84 @@ async function analyzeConversation() {
 
   analysisInputElem.value = "";
 }
+
+/********************************************************
+  FILE UPLOAD HANDLING
+********************************************************/
+function processFileUpload() {
+  const fileInput = document.getElementById("fileUpload");
+  const analysisInput = document.getElementById("analysisInput");
+
+  if (fileInput.files.length === 0) {
+    alert("No file selected. Please upload a valid text file.");
+    return;
+  }
+
+  const file = fileInput.files[0];
+  const reader = new FileReader();
+
+  reader.onload = function (event) {
+    const fileContents = event.target.result;
+    analysisInput.value = fileContents;
+  };
+
+  reader.onerror = function () {
+    alert("Failed to read the file. Please try again.");
+  };
+
+  reader.readAsText(file);
+}
+
+async function uploadFileForAnalysis() {
+  const fileInput = document.getElementById("fileUpload");
+  const teamNameElem = document.getElementById("teamName");
+  const conversationElem = document.getElementById("conversation");
+
+  const teamName = teamNameElem.value.trim();
+
+  if (!teamName) {
+    alert("Please enter a team name!");
+    return;
+  }
+
+  if (fileInput.files.length === 0) {
+    alert("Please upload a valid text file.");
+    return;
+  }
+
+  const file = fileInput.files[0];
+  const formData = new FormData();
+  formData.append("team_name", teamName);
+  formData.append("file", file);
+
+  try {
+    const response = await fetch("http://127.0.0.1:8000/analyze-file", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to analyze the uploaded file.");
+    }
+
+    const data = await response.json();
+    const finalStage = data.final_stage || "Uncertain";
+    const feedback = data.feedback || "";
+    const distribution = data.distribution || {};
+
+    // Show a short note in conversation
+    conversationElem.innerHTML += `
+      <div class="bubble user" style="font-style:italic;">
+        (Analyzed uploaded chat log for team: ${teamName})
+      </div>
+    `;
+    conversationElem.scrollTop = conversationElem.scrollHeight;
+
+    // Update the stage panel
+    updateStageUI(distribution, finalStage, feedback);
+
+  } catch (error) {
+    console.error("Error:", error);
+    alert(error.message);
+  }
+}

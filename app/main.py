@@ -7,6 +7,7 @@ from fastapi import FastAPI, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -125,6 +126,23 @@ def analyze_conversation(req: AnalyzeRequest, db: Session = Depends(get_db)):
         "final_stage": final_stage if final_stage else "Uncertain",
         "feedback": feedback if feedback else "",
         "distribution": accum_dist
+    }
+
+@app.post("/analyze-file")
+async def analyze_file(team_name: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    if not file.filename.endswith(".txt"):
+        raise HTTPException(status_code=400, detail="Only .txt files are supported")
+
+    file_contents = (await file.read()).decode("utf-8")
+    lines = file_contents.splitlines()
+
+    # Pass the lines to the existing analyzeConversation logic
+    final_stage, feedback, distribution = chatbot.analyze_conversation_db(db, team_name, lines)
+
+    return {
+        "final_stage": final_stage,
+        "feedback": feedback,
+        "distribution": distribution,
     }
 
 @app.post("/reset")

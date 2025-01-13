@@ -282,9 +282,11 @@
       <div id="analysisMode" class="hidden">
         <textarea id="analysisInput" placeholder="Paste multiple lines here... (each message on one line)"></textarea>
         <button onclick="analyzeConversation()">Analyze</button>
+        <label for="fileUpload">Or upload a chat log file:</label>
+        <input type="file" id="fileUpload" accept=".txt" onchange="processFileUpload()" />
+      </div>
       </div>
     </div>
-  </div>
 
   <div id="stageColumn">
     <div id="stageHeader">Stage Distribution</div>
