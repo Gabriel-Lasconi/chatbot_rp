@@ -1,3 +1,5 @@
+# stage_mapping.py
+
 from langchain_ollama import OllamaLLM
 
 class StageMapper:
@@ -18,7 +20,6 @@ class StageMapper:
         """
         Given the top-five emotions (each a dict with 'label' and 'score'),
         return a dictionary summarizing how much each Tuckman stage is 'activated'.
-        We then normalize so the total sums to 1.0, avoiding indefinite growth.
         """
         distribution = {stage: 0.0 for stage in self.stage_emotion_map}
 

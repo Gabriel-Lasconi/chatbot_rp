@@ -1,3 +1,8 @@
+/* ----------------------------------------------------
+   Global variable to track previous distribution
+---------------------------------------------------- */
+let previousDistribution = null;
+
 /********************************************************
   MODE SWITCHING + CLEARING
 ********************************************************/
@@ -8,6 +13,7 @@ function switchToConversationMode() {
   document.getElementById("analysisMode").classList.add("hidden");
   document.getElementById("conversationMode").classList.remove("hidden");
   document.getElementById("teamName").value = "";
+  document.getElementById("memberName").value = "";
   document.getElementById("analysisInput").value = "";
   document.getElementById("userInput").value = "";
   resetStageUI();
@@ -20,6 +26,7 @@ function switchToAnalysisMode() {
   document.getElementById("conversationMode").classList.add("hidden");
   document.getElementById("analysisMode").classList.remove("hidden");
   document.getElementById("teamName").value = "";
+  document.getElementById("memberName").value = "";
   document.getElementById("analysisInput").value = "";
   document.getElementById("userInput").value = "";
   resetStageUI();
@@ -31,54 +38,104 @@ function clearConversation() {
 }
 
 /********************************************************
-  STAGE / FEEDBACK UI UPDATES
+  STAGE / EMOTIONS / FEEDBACK UI UPDATES
 ********************************************************/
 function resetStageUI() {
-  // Reset bars to 0
+  // Reset stage bars to 0
   const defaultStages = ["Forming", "Storming", "Norming", "Performing", "Adjourning"];
   const stageBarsElem = document.getElementById("stageBars");
   stageBarsElem.innerHTML = "";
   defaultStages.forEach(st => {
-    stageBarsElem.innerHTML += createStageBarHTML(st, 0);
+    stageBarsElem.innerHTML += createStageBarHTML(st, 0, 0);
   });
   document.getElementById("finalStageSpan").textContent = "Uncertain";
   document.getElementById("stageFeedback").textContent = "";
+
+  // Reset last message emotion bars
+  const emotionBarsElem = document.getElementById("emotionBars");
+  emotionBarsElem.innerHTML = "<p style='font-size:14px;color:#777;'>No emotions detected.</p>";
+
+  // Reset our previous distribution
+  previousDistribution = null;
 }
 
-function createStageBarHTML(stageName, normalizedValue, actualValue) {
-  const percStr = actualValue.toFixed(2) * 100 + "%";
-  return `
-    <div class="stageBarContainer">
-      <span class="stageLabel">${stageName}:</span>
-      <div class="stageBar">
-        <div class="stageBarFill" style="width: ${normalizedValue * 100}%;"></div>
-      </div>
-      <span class="stagePercentage">${percStr}</span>
-    </div>
-  `;
-}
-
+/**
+ * Update the stage UI with a new distribution, final stage, and feedback.
+ * We compute the delta from previousDistribution to show (+/-).
+ */
 function updateStageUI(distribution, finalStage, feedback) {
   const stageBarsElem = document.getElementById("stageBars");
   stageBarsElem.innerHTML = "";
 
   const stageOrder = ["Forming", "Storming", "Norming", "Performing", "Adjourning"];
 
-  // Find the maximum value in the distribution
-  const maxValue = Math.max(...stageOrder.map(stage => distribution[stage] || 0));
-
-  // Update the bars
   stageOrder.forEach(stageName => {
-    const value = distribution[stageName] || 0;
-    const normalizedValue = maxValue > 0 ? value / maxValue : 0; // Scale relative to the max value
-    stageBarsElem.innerHTML += createStageBarHTML(stageName, normalizedValue, value);
+    // Current value (0..1)
+    const currentVal = distribution[stageName] || 0;
+    const currentPercent = (currentVal * 100).toFixed(2);
+
+    // Compute difference if we have a previousDistribution
+    let diffHtml = "";
+    if (previousDistribution) {
+      const oldVal = previousDistribution[stageName] || 0;
+      const oldPercent = oldVal * 100;
+      const diff = (currentVal * 100) - oldPercent; // difference in percentage points
+
+      if (Math.abs(diff) > 0.001) {
+        // Show difference if it's not trivial
+        const sign = diff > 0 ? "+" : "";
+        const diffColor = diff > 0 ? "#28a745" : "#dc3545"; // green for +, red for -
+        diffHtml = ` <span style="color:${diffColor}; font-size:0.9em;">
+          (${sign}${diff.toFixed(2)}%)
+        </span>`;
+      }
+    }
+
+    stageBarsElem.innerHTML += createStageBarHTML(stageName, currentPercent, currentPercent, diffHtml);
   });
 
   // Update final stage and feedback
   document.getElementById("finalStageSpan").textContent = finalStage || "Uncertain";
   document.getElementById("stageFeedback").textContent = feedback || "";
+
+  // Update previousDistribution
+  previousDistribution = { ...distribution };
 }
 
+/**
+ * Create a bar row for a given label, widthPercent, actualPercent, and optional diffHtml.
+ */
+function createStageBarHTML(label, widthPercent, actualPercent, diffHtml = "") {
+  return `
+    <div class="stageBarContainer">
+      <span class="stageLabel">${label}:</span>
+      <div class="stageBar">
+        <div class="stageBarFill" style="width: ${widthPercent}%;"></div>
+      </div>
+      <span class="stagePercentage">${actualPercent}%</span>
+      ${diffHtml}
+    </div>
+  `;
+}
+
+/**
+ * Update the last message's emotions in a separate panel.
+ */
+function updateEmotionsUI(emotions) {
+  const emotionBarsElem = document.getElementById("emotionBars");
+  emotionBarsElem.innerHTML = "";
+
+  if (!emotions || Object.keys(emotions).length === 0) {
+    emotionBarsElem.innerHTML = "<p style='font-size:14px;color:#777;'>No emotions detected.</p>";
+    return;
+  }
+
+  for (const [emotionLabel, rawValue] of Object.entries(emotions)) {
+    const widthPercent = (rawValue * 100).toFixed(2);
+    // Reuse the same bar-creation approach
+    emotionBarsElem.innerHTML += createStageBarHTML(emotionLabel, widthPercent, widthPercent);
+  }
+}
 
 /********************************************************
   AUTO LOAD TEAM INFO (onblur from teamName)
@@ -86,16 +143,16 @@ function updateStageUI(distribution, finalStage, feedback) {
 async function autoLoadTeamInfo() {
   const teamNameElem = document.getElementById("teamName");
   const teamName = teamNameElem.value.trim();
-  if (!teamName) return; // do nothing if empty
+  if (!teamName) return;
 
   try {
     const resp = await fetch(`http://127.0.0.1:8000/teaminfo?team_name=${encodeURIComponent(teamName)}`);
     if (!resp.ok) throw new Error("Could not load team info");
     const data = await resp.json();
-    // data: { distribution:{...}, final_stage:..., feedback:... }
+    // data: { distribution, final_stage, feedback }
     updateStageUI(data.distribution, data.final_stage, data.feedback);
   } catch (err) {
-    console.error("Error loading team info", err);
+    console.error("Error loading team info:", err);
     alert(err.message);
   }
 }
@@ -105,14 +162,20 @@ async function autoLoadTeamInfo() {
 ********************************************************/
 async function sendMessage() {
   const teamNameElem = document.getElementById("teamName");
+  const memberNameElem = document.getElementById("memberName");
   const userInputElem = document.getElementById("userInput");
   const conversationElem = document.getElementById("conversation");
 
   const teamName = teamNameElem.value.trim();
+  const memberName = memberNameElem.value.trim();
   const userMsg = userInputElem.value.trim();
 
   if (!teamName) {
     alert("Please enter a team name!");
+    return;
+  }
+  if (!memberName) {
+    alert("Please enter your (member) name!");
     return;
   }
   if (!userMsg) {
@@ -120,13 +183,27 @@ async function sendMessage() {
     return;
   }
 
-  // Display user's message in the chat
+  // Clear input immediately
+  userInputElem.value = "";
+
+  // Show user's message in the chat
   conversationElem.innerHTML += `<div class="bubble user">${userMsg}</div>`;
+  conversationElem.scrollTop = conversationElem.scrollHeight;
+
+  // Show a "Thinking..." bubble (with spinner)
+  const thinkingDiv = document.createElement("div");
+  thinkingDiv.classList.add("bubble", "bot");
+  thinkingDiv.innerHTML = `
+    <span class="spinner"></span>
+    <span style="margin-left:5px;">Thinking...</span>
+  `;
+  conversationElem.appendChild(thinkingDiv);
   conversationElem.scrollTop = conversationElem.scrollHeight;
 
   const payload = {
     text: userMsg,
-    team_name: teamName
+    team_name: teamName,
+    member_name: memberName
   };
 
   try {
@@ -140,25 +217,34 @@ async function sendMessage() {
       throw new Error("Failed to connect to the chatbot (conversation mode).");
     }
 
+    // Remove the "Thinking..." bubble
+    conversationElem.removeChild(thinkingDiv);
+
+    // Display the bot's actual response
     const data = await response.json();
     const botMessage = data.bot_message || "No response available.";
-
-    // Add chatbot's reply to conversation
     conversationElem.innerHTML += `<div class="bubble bot">${botMessage}</div>`;
     conversationElem.scrollTop = conversationElem.scrollHeight;
 
-    // Update stage distribution in the side panel
+    // Update stage distribution
     const distribution = data.distribution || {};
     const finalStage = data.stage || "Uncertain";
     const feedback = data.feedback || "";
     updateStageUI(distribution, finalStage, feedback);
 
-  } catch (error) {
-    console.error("Error:", error);
-    alert(error.message);
-  }
+    // Update last message’s emotions
+    const lastEmotions = data.last_emotion_dist || {};
+    updateEmotionsUI(lastEmotions);
 
-  userInputElem.value = "";
+  } catch (error) {
+    console.error("Error sending message:", error);
+    alert(error.message);
+
+    // If error, remove the "Thinking..." bubble
+    if (conversationElem.contains(thinkingDiv)) {
+      conversationElem.removeChild(thinkingDiv);
+    }
+  }
 }
 
 /********************************************************
@@ -166,14 +252,20 @@ async function sendMessage() {
 ********************************************************/
 async function analyzeConversation() {
   const teamNameElem = document.getElementById("teamName");
+  const memberNameElem = document.getElementById("memberName");
   const analysisInputElem = document.getElementById("analysisInput");
   const conversationElem = document.getElementById("conversation");
 
   const teamName = teamNameElem.value.trim();
+  const memberName = memberNameElem.value.trim();
   const bulkText = analysisInputElem.value.trim();
 
   if (!teamName) {
     alert("Please enter a team name!");
+    return;
+  }
+  if (!memberName) {
+    alert("Please enter your (member) name!");
     return;
   }
   if (!bulkText) {
@@ -189,6 +281,7 @@ async function analyzeConversation() {
 
   const payload = {
     team_name: teamName,
+    member_name: memberName,
     lines: lines
   };
 
@@ -207,19 +300,22 @@ async function analyzeConversation() {
     const feedback = data.feedback || "";
     const distribution = data.distribution || {};
 
-    // Show a short note in conversation about how many lines were analyzed
+    // Show a short note in conversation
     conversationElem.innerHTML += `
       <div class="bubble user" style="font-style:italic;">
-        (Analyzed ${lines.length} lines for team: ${teamName})
+        (Analyzed ${lines.length} lines for team: ${teamName}, member: ${memberName})
       </div>
     `;
     conversationElem.scrollTop = conversationElem.scrollHeight;
 
-    // Update side panel
+    // Update stage distribution
     updateStageUI(distribution, finalStage, feedback);
 
+    // If you want to show lastEmotions here, you'd need the server to return them.
+    // For now, we assume it doesn't.
+
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Error analyzing conversation:", error);
     alert(error.message);
   }
 
@@ -256,15 +352,20 @@ function processFileUpload() {
 async function uploadFileForAnalysis() {
   const fileInput = document.getElementById("fileUpload");
   const teamNameElem = document.getElementById("teamName");
+  const memberNameElem = document.getElementById("memberName");
   const conversationElem = document.getElementById("conversation");
 
   const teamName = teamNameElem.value.trim();
+  const memberName = memberNameElem.value.trim();
 
   if (!teamName) {
     alert("Please enter a team name!");
     return;
   }
-
+  if (!memberName) {
+    alert("Please enter your (member) name!");
+    return;
+  }
   if (fileInput.files.length === 0) {
     alert("Please upload a valid text file.");
     return;
@@ -273,6 +374,7 @@ async function uploadFileForAnalysis() {
   const file = fileInput.files[0];
   const formData = new FormData();
   formData.append("team_name", teamName);
+  formData.append("member_name", memberName);
   formData.append("file", file);
 
   try {
@@ -290,19 +392,17 @@ async function uploadFileForAnalysis() {
     const feedback = data.feedback || "";
     const distribution = data.distribution || {};
 
-    // Show a short note in conversation
     conversationElem.innerHTML += `
       <div class="bubble user" style="font-style:italic;">
-        (Analyzed uploaded chat log for team: ${teamName})
+        (Analyzed uploaded chat log for team: ${teamName}, member: ${memberName})
       </div>
     `;
     conversationElem.scrollTop = conversationElem.scrollHeight;
 
-    // Update the stage panel
     updateStageUI(distribution, finalStage, feedback);
 
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Error uploading file for analysis:", error);
     alert(error.message);
   }
 }

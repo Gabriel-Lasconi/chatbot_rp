@@ -1,23 +1,20 @@
 # main.py
 
 import os
-from typing import List, Optional
+from typing import List
 
-from fastapi import FastAPI, Depends, Query
+from fastapi import FastAPI, Depends, Query, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi import FastAPI, UploadFile, File, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.db import init_db, SessionLocal
+from app.db import init_db, SessionLocal, Team
 from app.chatbot_generative import ChatbotGenerative
-from app.db import Team
 
 app = FastAPI()
 
-# CORS if needed
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -37,7 +34,6 @@ def get_db():
     finally:
         db.close()
 
-# Mount static folder for styles.css, app.js, etc.
 static_path = os.path.join(os.path.dirname(__file__), "..")
 app.mount("/static", StaticFiles(directory=static_path), name="static")
 
@@ -45,17 +41,16 @@ chatbot = ChatbotGenerative()
 
 class AnalyzeRequest(BaseModel):
     team_name: str
+    member_name: str
     lines: List[str]
 
-class Message(BaseModel):
+class ChatRequest(BaseModel):
     text: str
     team_name: str
+    member_name: str
 
 @app.get("/", response_class=HTMLResponse)
 def root_page():
-    """
-    Serve index.html
-    """
     index_path = os.path.join(
         os.path.dirname(__file__),
         "..",
@@ -70,88 +65,95 @@ def root_page():
 
 @app.get("/teaminfo")
 def get_team_info(team_name: str = Query(...), db: Session = Depends(get_db)):
-    """
-    Returns the current distribution of each stage (Forming, Storming, Norming, Performing, Adjourning)
-    and the team's final stage (if any) with feedback, if the stage is not Uncertain.
-    If the team doesn't exist, create it with 0 distribution.
-    """
     team = db.query(Team).filter(Team.name == team_name).first()
     if not team:
-        # Create a new team, distribution 0, stage=Uncertain
-        team = Team(name=team_name, current_stage="Uncertain", stage_confidence=0.0)
+        team = Team(name=team_name, current_stage="Uncertain")
         db.add(team)
         db.commit()
         db.refresh(team)
+        return {
+            "distribution": {},
+            "final_stage": "Uncertain",
+            "feedback": ""
+        }
 
-    # Load distribution
-    accum_dist = team.load_accum_distrib()
-    # If brand new, might be {}
-    if not accum_dist:
-        # Make sure we have 5 keys with 0.0
-        accum_dist = {stg: 0.0 for stg in chatbot.stage_mapper.stage_emotion_map.keys()}
-
+    distribution = team.load_team_distribution()
     final_stage = team.current_stage
+
     feedback = ""
     if final_stage and final_stage != "Uncertain":
         feedback = chatbot.stage_mapper.get_feedback_for_stage(final_stage)
 
     return {
-        "distribution": accum_dist,
+        "distribution": distribution,
         "final_stage": final_stage,
         "feedback": feedback
     }
 
 @app.post("/chat")
-def chat_with_bot(message: Message, db: Session = Depends(get_db)):
-    """
-    Single line conversation. Returns the updated distribution, final stage, and feedback if any.
-    """
-    bot_msg, final_stage, feedback, accum_dist = chatbot.process_line(db, message.team_name, message.text)
+def chat_with_bot(req: ChatRequest, db: Session = Depends(get_db)):
+    bot_msg, final_stage, feedback, member_dist, last_emotion_dist = chatbot.process_line(
+        db, req.team_name, req.member_name, req.text
+    )
+
+    the_team = db.query(Team).filter(Team.name == req.team_name).first()
+    team_distribution = the_team.load_team_distribution()
 
     return {
         "bot_message": bot_msg,
         "stage": final_stage if final_stage else "Uncertain",
         "feedback": feedback if feedback else "",
-        "distribution": accum_dist
+        "distribution": team_distribution,
+        "last_emotion_dist": last_emotion_dist  # <--- we pass the last msg's emotions to front-end
     }
 
 @app.post("/analyze")
 def analyze_conversation(req: AnalyzeRequest, db: Session = Depends(get_db)):
-    """
-    Multi-line conversation analysis. Returns final stage, feedback, distribution, etc.
-    """
-    final_stage, feedback, accum_dist = chatbot.analyze_conversation_db(db, req.team_name, req.lines)
+    final_stage, feedback, _ = chatbot.analyze_conversation_db(
+        db, req.team_name, req.member_name, req.lines
+    )
+
+    the_team = db.query(Team).filter(Team.name == req.team_name).first()
+    team_distribution = the_team.load_team_distribution()
 
     return {
         "final_stage": final_stage if final_stage else "Uncertain",
         "feedback": feedback if feedback else "",
-        "distribution": accum_dist
+        "distribution": team_distribution
     }
 
 @app.post("/analyze-file")
-async def analyze_file(team_name: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def analyze_file(
+    team_name: str,
+    member_name: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
     if not file.filename.endswith(".txt"):
         raise HTTPException(status_code=400, detail="Only .txt files are supported")
 
     file_contents = (await file.read()).decode("utf-8")
     lines = file_contents.splitlines()
 
-    # Pass the lines to the existing analyzeConversation logic
-    final_stage, feedback, distribution = chatbot.analyze_conversation_db(db, team_name, lines)
+    final_stage, feedback, distribution = chatbot.analyze_conversation_db(
+        db, team_name, member_name, lines
+    )
 
     return {
         "final_stage": final_stage,
         "feedback": feedback,
-        "distribution": distribution,
+        "distribution": distribution
     }
 
 @app.post("/reset")
-def reset_team(message: Message, db: Session = Depends(get_db)):
+def reset_team(req: ChatRequest, db: Session = Depends(get_db)):
     """
     Reset a team's conversation state in the DB.
+    (Also resets members' states and messages.)
     """
-    chatbot.reset_team(db, message.team_name)
-    return {"message": f"Team '{message.team_name}' has been reset."}
+    chatbot.reset_team(db, req.team_name)
+    return {"message": f"Team '{req.team_name}' has been reset."}
+
 
 if __name__ == "__main__":
     import uvicorn

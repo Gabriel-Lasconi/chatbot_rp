@@ -38,6 +38,7 @@
       flex-direction: column;
       background: #ffffff;
     }
+
     #header {
       background: #4a90e2;
       color: white;
@@ -46,6 +47,7 @@
       font-weight: 700;
       padding: 20px;
     }
+
     #modeToggle {
       display: flex;
       justify-content: space-evenly;
@@ -120,9 +122,11 @@
     #teamContainer {
       display: flex;
       gap: 10px;
+      margin-bottom: 10px;
     }
 
-    #teamName {
+    #teamName,
+    #memberName {
       flex: 1;
       padding: 10px;
       font-size: 14px;
@@ -132,12 +136,14 @@
       background: #f9f9f9;
     }
 
-    #conversationInput, #analysisMode {
+    #conversationInput,
+    #analysisMode {
       display: flex;
       gap: 10px;
     }
 
-    #userInput, #analysisInput {
+    #userInput,
+    #analysisInput {
       flex: 1;
       padding: 15px;
       font-size: 14px;
@@ -157,6 +163,7 @@
       cursor: pointer;
       transition: background-color 0.3s ease;
     }
+
     button:hover {
       background-color: #357ab8;
     }
@@ -164,6 +171,7 @@
     .hidden {
       display: none !important;
     }
+
     /* Stage Column */
     #stageColumn {
       flex: 2;
@@ -180,6 +188,27 @@
       padding: 20px;
       font-size: 22px;
       font-weight: 700;
+    }
+
+    #finalStageInfo {
+      padding: 20px;
+      border-top: none;
+      border-bottom: 1px solid #dce1ed;
+      background: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    #finalStageInfo h3 {
+      font-size: 18px;
+      margin: 0;
+    }
+
+    #finalStageInfo p {
+      font-size: 14px;
+      color: #666;
+      margin: 0;
     }
 
     #stageBars {
@@ -200,27 +229,20 @@
       font-size: 14px;
       font-weight: 600;
     }
+
     .stageBar {
       flex: 1;
       height: 15px;
       border-radius: 10px;
-      background: #eef2f9; /* Background for empty bar */
+      background: #eef2f9;
       overflow: hidden;
       position: relative;
     }
+
     .stageBarFill {
       height: 100%;
       border-radius: 10px;
-      background: #4a90e2; /* Fill color */
-      transition: width 0.5s ease;
-    }
-    .stageBar::after {
-      content: '';
-      display: block;
-      height: 100%;
-      border-radius: 10px;
       background: #4a90e2;
-      width: 0;
       transition: width 0.5s ease;
     }
 
@@ -228,79 +250,126 @@
       font-size: 14px;
       font-weight: 600;
       color: #555;
+      width: 60px; /* Increase to make it smaller */
+      text-align: right;
     }
 
-    #finalStageInfo {
+    /* If you want a separate container for the delta text, you can add: */
+    /* .stageDiff {*/
+    /*   width: 60px;*/
+    /*   text-align: right;*/
+    /*   font-size: 0.9em;*/
+    /*} */
+    /* Additional section for Last Message Emotions */
+    #lastEmotionsInfo {
       padding: 20px;
-      border-top: 1px solid #dce1ed;
-      background: #f8fafc;
+      border-top: none;
+      background: #ffffff;
       display: flex;
       flex-direction: column;
       gap: 10px;
     }
-
-    #finalStageInfo h3 {
+    #lastEmotionsInfo h3 {
       font-size: 18px;
       margin: 0;
     }
+    #emotionBars {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #4a90e2;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      animation: spin 1s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 10px;
+    }
 
-    #finalStageInfo p {
-      font-size: 14px;
-      color: #666;
-      margin: 0;
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+      100% {
+        transform: rotate(360deg);
+      }
     }
   </style>
 </head>
 <body>
-<div id="appContainer">
-  <div id="chatColumn">
-    <div id="header">Team Chatbot - Marco</div>
+  <div id="appContainer">
+    <div id="chatColumn">
+      <div id="header">Team Chatbot - Marco</div>
 
-    <div id="modeToggle">
-      <button class="mode-btn" id="convBtn" onclick="switchToConversationMode()">Conversation Mode</button>
-      <button class="mode-btn" id="analBtn" onclick="switchToAnalysisMode()">Analysis Mode</button>
-    </div>
-
-    <div id="avatar">
-      <img src="/static/avatar.png" alt="Chatbot Avatar" />
-    </div>
-
-    <div id="conversation"></div>
-
-    <div id="input-box">
-      <div id="teamContainer">
-        <input type="text" id="teamName" placeholder="Enter Team Name..." onblur="autoLoadTeamInfo()" />
+      <div id="modeToggle">
+        <button class="mode-btn" id="convBtn" onclick="switchToConversationMode()">Conversation Mode</button>
+        <button class="mode-btn" id="analBtn" onclick="switchToAnalysisMode()">Analysis Mode</button>
       </div>
 
-      <div id="conversationMode">
-        <div id="conversationInput">
-          <input type="text" id="userInput" placeholder="Type your message here..." />
-          <button onclick="sendMessage()">Send</button>
+      <div id="avatar">
+        <img src="/static/avatar.png" alt="Chatbot Avatar" />
+      </div>
+
+      <div id="conversation"></div>
+
+      <div id="input-box">
+        <div id="teamContainer">
+          <input
+            type="text"
+            id="teamName"
+            placeholder="Enter Team Name..."
+            onblur="autoLoadTeamInfo()"
+          />
+          <input type="text" id="memberName" placeholder="Enter Your Name..." />
+        </div>
+
+        <div id="conversationMode">
+          <div id="conversationInput">
+            <input
+              type="text"
+              id="userInput"
+              placeholder="Type your message here..."
+            />
+            <button onclick="sendMessage()">Send</button>
+          </div>
+        </div>
+
+        <div id="analysisMode" class="hidden">
+          <textarea
+            id="analysisInput"
+            placeholder="Paste multiple lines here... (each message on one line)"
+          ></textarea>
+          <button onclick="analyzeConversation()">Analyze</button>
+          <label for="fileUpload">Or upload a chat log file:</label>
+          <input type="file" id="fileUpload" accept=".txt" onchange="processFileUpload()" />
         </div>
       </div>
-
-      <div id="analysisMode" class="hidden">
-        <textarea id="analysisInput" placeholder="Paste multiple lines here... (each message on one line)"></textarea>
-        <button onclick="analyzeConversation()">Analyze</button>
-        <label for="fileUpload">Or upload a chat log file:</label>
-        <input type="file" id="fileUpload" accept=".txt" onchange="processFileUpload()" />
-      </div>
-      </div>
     </div>
 
-  <div id="stageColumn">
-    <div id="stageHeader">Stage Distribution</div>
+    <div id="stageColumn">
+      <div id="stageHeader">Stage Distribution</div>
 
-    <div id="stageBars">
-      <!-- Stage bars will be dynamically filled -->
-    </div>
+      <div id="finalStageInfo">
+        <h3>
+          Current Stage:
+          <span id="finalStageSpan">Uncertain</span>
+        </h3>
+        <p id="stageFeedback">No data available.</p>
+      </div>
 
-    <div id="finalStageInfo">
-      <h3>Current Stage: <span id="finalStageSpan">Uncertain</span></h3>
-      <p id="stageFeedback">No data available.</p>
+      <div id="stageBars"></div>
+
+      <!-- Additional panel for the last user message's emotions -->
+      <div id="lastEmotionsInfo">
+        <h3>Emotions detected in the last message:</h3>
+        <div id="emotionBars"></div>
+      </div>
     </div>
   </div>
-</div>
-<script src="/static/app.js"></script>
+  <script src="/static/app.js"></script>
 </body>
 </html>

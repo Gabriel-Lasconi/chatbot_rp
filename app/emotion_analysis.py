@@ -1,10 +1,12 @@
+# emotion_analysis.py
+
 from transformers import pipeline
 
 class EmotionDetector:
     def __init__(self):
         self.zero_shot_classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
 
-        # Candidate emotions taken from the table in literature review
+        # Candidate emotions
         self.candidate_emotions = [
             "excitement", "anticipation", "anxiety", "curiosity", "eagerness",
             "frustration", "tension", "defensiveness", "conflict", "uncertainty",
@@ -16,13 +18,6 @@ class EmotionDetector:
     def detect_emotion(self, text: str, top_n: int = 5):
         """
         Detect top emotions using zero-shot classification.
-
-        Args:
-            text (str): Input text.
-            top_n (int): Number of top emotions to return.
-
-        Returns:
-            dict: The dominant emotion, its confidence score, and the top 'n' emotions with confidence scores.
         """
         if not text.strip():
             return {
@@ -33,12 +28,17 @@ class EmotionDetector:
 
         result = self.zero_shot_classifier(text, self.candidate_emotions)
 
-        top_emotions = [{"label": label, "score": score} for label, score in zip(result["labels"], result["scores"])]
+        top_emotions = [
+            {"label": label, "score": score}
+            for label, score in zip(result["labels"], result["scores"])
+        ]
         top_emotions = top_emotions[:top_n]
 
         dominant_emotion = top_emotions[0]["label"]
         confidence = top_emotions[0]["score"]
 
-        return {"label": dominant_emotion, "score": confidence, "top_emotions": top_emotions}
-
-
+        return {
+            "label": dominant_emotion,
+            "score": confidence,
+            "top_emotions": top_emotions
+        }
