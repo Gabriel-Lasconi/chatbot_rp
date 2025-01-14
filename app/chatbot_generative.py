@@ -82,51 +82,50 @@ class ChatbotGenerative:
 
     def _compute_team_stage(self, db, team):
         """
-        After we update each member's stage, compute the team's average numeric stage
-        and store the combined distribution in team.stage_distribution.
+        After we update each member's accum_distrib,
+        compute the 'combined' distribution for the entire team,
+        then pick whichever stage has the highest value in that distribution
+        as the final team stage.
         """
-        numeric_map = {
-            "Forming": 0,
-            "Storming": 1,
-            "Norming": 2,
-            "Performing": 3,
-            "Adjourning": 4,
-            "Uncertain": None
-        }
         stage_names = ["Forming", "Storming", "Norming", "Performing", "Adjourning"]
-
-        valid_stage_vals = []
-        for mem in team.members:
-            if mem.current_stage in numeric_map and numeric_map[mem.current_stage] is not None:
-                valid_stage_vals.append(numeric_map[mem.current_stage])
-
-        if not valid_stage_vals:
-            team.current_stage = "Uncertain"
-        else:
-            avg_val = sum(valid_stage_vals) / len(valid_stage_vals)
-            idx = int(round(avg_val))
-            if idx < 0:
-                idx = 0
-            if idx > 4:
-                idx = 4
-            team.current_stage = stage_names[idx]
-
-        # combine all members' accum_distrib for the team distribution
         combined = {s: 0.0 for s in stage_names}
         num_members = 0
+
+        # Sum up each member's accum_distrib
         for mem in team.members:
-            dist = mem.load_accum_distrib()  # member's Tuckman distribution
+            dist = mem.load_accum_distrib()
             if dist:
                 num_members += 1
-                for s in stage_names:
-                    combined[s] += dist.get(s, 0.0)
+                for stg, val in dist.items():
+                    if stg in combined:
+                        combined[stg] += val
+
+        # If no members have a distribution, we do combined={}
         if num_members > 0:
-            for s in combined:
-                combined[s] /= num_members
+            for stg in combined:
+                combined[stg] /= num_members
         else:
             combined = {}
 
+        # Save the combined distribution
         team.save_team_distribution(combined)
+        db.commit()
+
+        # If combined is empty, set team.current_stage=Uncertain
+        if not combined or all(v == 0.0 for v in combined.values()):
+            team.current_stage = "Uncertain"
+            db.commit()
+            return
+
+        # Otherwise, find the stage with the maximum value
+        best_stage = None
+        best_val = -1.0
+        for stg, val in combined.items():
+            if val > best_val:
+                best_val = val
+                best_stage = stg
+
+        team.current_stage = best_stage
         db.commit()
 
     def process_line(self, db, team_name: str, member_name: str, text: str):

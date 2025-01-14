@@ -1,292 +1,350 @@
-/* ----------------------------------------------------
-   Global variables to track distributions and emotions
----------------------------------------------------- */
-let previousDistribution = null;
-let lastEmotionsData = {};     // last single-message emotions
-let accumEmotionsData = {};    // accumulative (overall) emotions
+/* app.js */
 
-/********************************************************
-  MODE SWITCHING + CLEARING
-********************************************************/
-function switchToConversationMode() {
-  const confirmed = confirm("Switch to conversation mode? This will erase the current chat history. Continue?");
-  if (!confirmed) return;
-  clearConversation();
-  document.getElementById("analysisMode").classList.add("hidden");
-  document.getElementById("conversationMode").classList.remove("hidden");
-  document.getElementById("teamName").value = "";
-  document.getElementById("memberName").value = "";
-  document.getElementById("analysisInput").value = "";
-  document.getElementById("userInput").value = "";
-  resetStageUI();
-}
+/*
+  Wrap everything in an IIFE that returns "App"
+  => Only one global variable: "App".
+*/
+const App = (function() {
 
-function switchToAnalysisMode() {
-  const confirmed = confirm("Switch to analysis mode? This will erase the current chat history. Continue?");
-  if (!confirmed) return;
-  clearConversation();
-  document.getElementById("conversationMode").classList.add("hidden");
-  document.getElementById("analysisMode").classList.remove("hidden");
-  document.getElementById("teamName").value = "";
-  document.getElementById("memberName").value = "";
-  document.getElementById("analysisInput").value = "";
-  document.getElementById("userInput").value = "";
-  resetStageUI();
-}
+  // Private local state in closure
+  let previousDistribution = null;
+  let lastEmotionsData = null;
 
-function clearConversation() {
-  const conversationElem = document.getElementById("conversation");
-  conversationElem.innerHTML = "";
-}
+  // For toggling: We store the team's distribution vs. member's distribution
+  // But we won't keep them globally. We'll fetch them from endpoints on demand.
 
-/********************************************************
-  STAGE / EMOTIONS / FEEDBACK UI UPDATES
-********************************************************/
-function resetStageUI() {
-  // Reset stage bars to 0
-  const defaultStages = ["Forming", "Storming", "Norming", "Performing", "Adjourning"];
-  const stageBarsElem = document.getElementById("stageBars");
-  stageBarsElem.innerHTML = "";
-  defaultStages.forEach(st => {
-    stageBarsElem.innerHTML += createStageBarHTML(st, 0, 0);
-  });
-  document.getElementById("finalStageSpan").textContent = "Uncertain";
-  document.getElementById("stageFeedback").textContent = "";
+  /* Reusable UI resets */
+  function clearConversation() {
+    document.getElementById("conversation").innerHTML = "";
+  }
 
-  // Reset the emotions
-  lastEmotionsData = {};
-  accumEmotionsData = {};
-  document.getElementById("emotionsTitle").textContent = "Emotions (Last Message)";
-  document.getElementById("emotionBars").innerHTML = "<p style='font-size:14px;color:#777;'>No emotions detected.</p>";
+  function resetStageUI() {
+    previousDistribution = null;
+    document.getElementById("finalStageSpan").textContent = "Uncertain";
+    document.getElementById("stageFeedback").textContent = "";
+    document.getElementById("stageBars").innerHTML = "";
+  }
 
-  previousDistribution = null;
-}
+  /* MODE SWITCHING */
+  function switchToConversationMode() {
+    const confirmed = confirm("Switch to conversation mode? This will erase the current chat history. Continue?");
+    if(!confirmed) return;
+    clearConversation();
+    document.getElementById("analysisMode").classList.add("hidden");
+    document.getElementById("conversationMode").classList.remove("hidden");
+    document.getElementById("teamName").value = "";
+    document.getElementById("memberName").value = "";
+    document.getElementById("analysisInput").value = "";
+    document.getElementById("userInput").value = "";
+    resetStageUI();
+  }
 
-/**
- * Update the stage UI with a new distribution, final stage, and feedback.
- * We compute the delta from previousDistribution to show (+/-).
- */
-function updateStageUI(distribution, finalStage, feedback) {
-  const stageBarsElem = document.getElementById("stageBars");
-  stageBarsElem.innerHTML = "";
+  function switchToAnalysisMode() {
+    const confirmed = confirm("Switch to analysis mode? This will erase the current chat history. Continue?");
+    if(!confirmed) return;
+    clearConversation();
+    document.getElementById("conversationMode").classList.add("hidden");
+    document.getElementById("analysisMode").classList.remove("hidden");
+    document.getElementById("teamName").value = "";
+    document.getElementById("memberName").value = "";
+    document.getElementById("analysisInput").value = "";
+    document.getElementById("userInput").value = "";
+    resetStageUI();
+  }
 
-  const stageOrder = ["Forming", "Storming", "Norming", "Performing", "Adjourning"];
+  /* STAGE / FEEDBACK UI */
+  function updateStageUI(distribution, finalStage, feedback) {
+    const stageBarsElem = document.getElementById("stageBars");
+    stageBarsElem.innerHTML = "";
 
-  stageOrder.forEach(stageName => {
-    const currentVal = distribution[stageName] || 0;
-    const currentPercent = (currentVal * 100).toFixed(2);
+    const stageOrder = ["Forming", "Storming", "Norming", "Performing", "Adjourning"];
 
-    let diffHtml = "";
-    if (previousDistribution) {
-      const oldVal = previousDistribution[stageName] || 0;
-      const oldPercent = oldVal * 100;
-      const diff = (currentVal * 100) - oldPercent;
-      if (Math.abs(diff) > 0.001) {
-        const sign = diff > 0 ? "+" : "";
-        const diffColor = diff > 0 ? "#28a745" : "#dc3545";
-        diffHtml = ` <span style="color:${diffColor}; font-size:0.9em;">
-          (${sign}${diff.toFixed(2)}%)
-        </span>`;
+    stageOrder.forEach(stageName => {
+      const currentVal = distribution[stageName] || 0;
+      const currentPercent = (currentVal*100).toFixed(2);
+
+      let diffHtml = "";
+      if(previousDistribution) {
+        const oldVal = previousDistribution[stageName] || 0;
+        const oldPercent = oldVal*100;
+        const diff = (currentVal*100) - oldPercent;
+        if(Math.abs(diff)>0.01){
+          const sign = (diff>0)? "+":"";
+          const diffColor = (diff>0)? "#28a745":"#dc3545";
+          diffHtml = ` <span style="color:${diffColor}; font-size:0.9em;">(${sign}${diff.toFixed(2)}%)</span>`;
+        }
       }
-    }
 
-    stageBarsElem.innerHTML += createStageBarHTML(stageName, currentPercent, currentPercent, diffHtml);
-  });
+      stageBarsElem.innerHTML += createStageBarHTML(stageName, currentPercent, currentPercent, diffHtml);
+    });
 
-  document.getElementById("finalStageSpan").textContent = finalStage || "Uncertain";
-  document.getElementById("stageFeedback").textContent = feedback || "";
+    document.getElementById("finalStageSpan").textContent = finalStage || "Uncertain";
+    document.getElementById("stageFeedback").textContent = feedback || "";
 
-  previousDistribution = { ...distribution };
-}
+    previousDistribution = {...distribution};
+  }
 
-/**
- * Create a bar row for a given label, widthPercent, actualPercent, and optional diffHtml.
- */
-function createStageBarHTML(label, widthPercent, actualPercent, diffHtml = "") {
-  return `
-    <div class="stageBarContainer">
-      <span class="stageLabel">${label}:</span>
-      <div class="stageBar">
-        <div class="stageBarFill" style="width: ${widthPercent}%;"></div>
+  function createStageBarHTML(label, widthPercent, actualPercent, diffHtml="") {
+    return `
+      <div class="stageBarContainer">
+        <span class="stageLabel">${label}:</span>
+        <div class="stageBar">
+          <div class="stageBarFill" style="width: ${widthPercent}%;"></div>
+        </div>
+        <span class="stagePercentage">${actualPercent}%</span>
+        ${diffHtml}
       </div>
-      <span class="stagePercentage">${actualPercent}%</span>
-      ${diffHtml}
-    </div>
-  `;
-}
+    `;
+  }
 
-/**
- * Show an emotions dictionary as bars
- */
-// function renderEmotionsInBars(emotions) {
-//   const emotionBarsElem = document.getElementById("emotionBars");
-//   emotionBarsElem.innerHTML = "";
-//
-//   if (!emotions || Object.keys(emotions).length === 0) {
-//     emotionBarsElem.innerHTML = "<p style='font-size:14px;color:#777;'>No emotions detected.</p>";
-//     return;
-//   }
-//
-//   for (const [emotionLabel, rawValue] of Object.entries(emotions)) {
-//     const widthPercent = (rawValue * 100).toFixed(2);
-//     emotionBarsElem.innerHTML += createStageBarHTML(emotionLabel, widthPercent, widthPercent);
-//   }
-// }
+/* Show the TEAM distribution */
+async function showTeamStageDistribution() {
+  console.log("showTeamStageDistribution() called");
 
-function renderEmotionsInBars(emotions) {
-  const emotionBarsElem = document.getElementById("emotionBars");
-  emotionBarsElem.innerHTML = "";
+  // 1) Update the heading text
+  document.getElementById("stageHeader").textContent = "Stage Distribution (Team Stage)";
 
-  // Convert the {emotionLabel: value} object to an array of [label, value]
-  let entries = Object.entries(emotions);
-
-  // Sort descending by value
-  entries.sort((a, b) => b[1] - a[1]);
-
-  // Slice the first 10
-  const top7 = entries.slice(0, 10);
-
-  // If there's nothing to display, show a small message
-  if (top7.length === 0) {
-    emotionBarsElem.innerHTML = "<p style='font-size:14px;color:#777;'>No emotions detected.</p>";
+  // 2) Get the team name, ensure non-empty
+  const teamName = document.getElementById("teamName").value.trim();
+  if (!teamName) {
+    alert("Please enter a team name first!");
     return;
   }
 
-  // Render each of the top-7 as a bar
-  for (const [emotionLabel, rawValue] of top7) {
-    const widthPercent = (rawValue * 100).toFixed(2);
-    emotionBarsElem.innerHTML += createStageBarHTML(emotionLabel, widthPercent, widthPercent);
-  }
-}
-
-/**
- * Toggle to show last message emotions
- */
-function showLastEmotions() {
-  console.log("showLastEmotions() called. Data:", lastEmotionsData);
-  document.getElementById("emotionsTitle").textContent = "Emotions (Last Message)";
-  renderEmotionsInBars(lastEmotionsData);
-}
-
-/**
- * Toggle to show accumulative emotions
- */
-function showAccumEmotions() {
-  console.log("showAccumEmotions() called. Data:", accumEmotionsData);
-  document.getElementById("emotionsTitle").textContent = "Emotions (Accumulative)";
-  renderEmotionsInBars(accumEmotionsData);
-}
-
-/********************************************************
-  AUTO LOAD TEAM INFO (onblur from teamName)
-********************************************************/
-async function autoLoadTeamInfo() {
-  const teamNameElem = document.getElementById("teamName");
-  const teamName = teamNameElem.value.trim();
-  if (!teamName) return;
-
+  // 3) Call /teaminfo to fetch the entire team's distribution
   try {
     const resp = await fetch(`http://127.0.0.1:8000/teaminfo?team_name=${encodeURIComponent(teamName)}`);
-    if (!resp.ok) throw new Error("Could not load team info");
+    if (!resp.ok) throw new Error("Could not load team distribution");
     const data = await resp.json();
+    // data => { distribution, final_stage, feedback }
     updateStageUI(data.distribution, data.final_stage, data.feedback);
   } catch (err) {
-    console.error("Error loading team info:", err);
     alert(err.message);
   }
 }
 
-/********************************************************
-  CONVERSATION MODE
-********************************************************/
-async function sendMessage() {
-  const teamNameElem = document.getElementById("teamName");
-  const memberNameElem = document.getElementById("memberName");
-  const userInputElem = document.getElementById("userInput");
-  const conversationElem = document.getElementById("conversation");
+/* Show the PERSONAL (Member) distribution */
+async function showMyStageDistribution() {
+  console.log("showMyStageDistribution() called");
 
-  const teamName = teamNameElem.value.trim();
-  const memberName = memberNameElem.value.trim();
-  const userMsg = userInputElem.value.trim();
+  // 1) Update the heading text
+  document.getElementById("stageHeader").textContent = "Stage Distribution (My Stage)";
 
-  if (!teamName) {
-    alert("Please enter a team name!");
-    return;
-  }
-  if (!memberName) {
-    alert("Please enter your (member) name!");
-    return;
-  }
-  if (!userMsg) {
-    alert("Please enter a message!");
+  // 2) Get the team & member name, ensure non-empty
+  const teamName = document.getElementById("teamName").value.trim();
+  const memberName = document.getElementById("memberName").value.trim();
+  if (!teamName || !memberName) {
+    alert("Please enter a team and member name first!");
     return;
   }
 
-  // Clear input immediately
-  userInputElem.value = "";
-
-  // Show user's message
-  conversationElem.innerHTML += `<div class="bubble user">${userMsg}</div>`;
-  conversationElem.scrollTop = conversationElem.scrollHeight;
-
-  // Show "Thinking..."
-  const thinkingDiv = document.createElement("div");
-  thinkingDiv.classList.add("bubble", "bot");
-  thinkingDiv.innerHTML = `
-    <span class="spinner"></span>
-    <span style="margin-left:5px;">Thinking...</span>
-  `;
-  conversationElem.appendChild(thinkingDiv);
-  conversationElem.scrollTop = conversationElem.scrollHeight;
-
-  const payload = {
-    text: userMsg,
-    team_name: teamName,
-    member_name: memberName
-  };
-
+  // 3) Call /memberinfo to get the personal distribution
   try {
-    const response = await fetch("http://127.0.0.1:8000/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
+    const resp = await fetch(
+      `http://127.0.0.1:8000/memberinfo?team_name=${encodeURIComponent(teamName)}&member_name=${encodeURIComponent(memberName)}`
+    );
+    if (!resp.ok) throw new Error("Could not load member info");
+    const data = await resp.json();
+    // data => { distribution, final_stage, accum_emotions? }
 
-    if (!response.ok) {
-      throw new Error("Failed to connect to the chatbot (conversation mode).");
-    }
-
-    // Remove "Thinking..."
-    conversationElem.removeChild(thinkingDiv);
-
-    // Show bot response
-    const data = await response.json();
-    const botMessage = data.bot_message || "No response available.";
-    conversationElem.innerHTML += `<div class="bubble bot">${botMessage}</div>`;
-    conversationElem.scrollTop = conversationElem.scrollHeight;
-
-    // Update stage distribution
-    const distribution = data.distribution || {};
-    const finalStage = data.stage || "Uncertain";
-    const feedback = data.feedback || "";
-    updateStageUI(distribution, finalStage, feedback);
-
-    // IMPORTANT: retrieve both last and accum emotions
-    lastEmotionsData = data.last_emotion_dist || {};
-    accumEmotionsData = data.accum_emotions || {};
-
-    // By default show last message emotions
-    showLastEmotions(); // or showAccumEmotions();
-
-  } catch (error) {
-    console.error("Error sending message:", error);
-    alert(error.message);
-
-    if (conversationElem.contains(thinkingDiv)) {
-      conversationElem.removeChild(thinkingDiv);
-    }
+    updateStageUI(data.distribution, data.final_stage, "");
+  } catch (err) {
+    alert(err.message);
   }
 }
+
+  /* EMOTIONS TOGGLE => We'll fetch from /chat or do last known?
+     We'll keep a small local store for lastEmotions, accumEmotions
+     if we want. That might come from /chat or /memberinfo in a
+     real bigger design.
+  */
+  function renderEmotionsInBars(emotions) {
+    const emotionBarsElem = document.getElementById("emotionBars");
+    emotionBarsElem.innerHTML = "";
+
+    let entries = Object.entries(emotions);
+    entries.sort((a,b)=> b[1]-a[1]);
+    const top10 = entries.slice(0,10);
+
+    if(top10.length===0){
+      emotionBarsElem.innerHTML = "<p style='font-size:14px;color:#777;'>No emotions detected.</p>";
+      return;
+    }
+    for(const [lbl,val] of top10){
+      const pct=(val*100).toFixed(2);
+      emotionBarsElem.innerHTML += createStageBarHTML(lbl, pct, pct);
+    }
+  }
+
+  function showLastEmotions() {
+  console.log("showLastEmotions() called.");
+
+  // If there's no lastEmotionsData (from /chat) or it's empty, show a note:
+  if (!lastEmotionsData || Object.keys(lastEmotionsData).length === 0) {
+    document.getElementById("emotionsTitle").textContent = "Emotions (Last Message)";
+    const emotionBarsElem = document.getElementById("emotionBars");
+    emotionBarsElem.innerHTML = "<p style='font-size:14px;color:#777;'>No emotions detected yet. Please write a message!</p>";
+    return;
+  }
+
+  // If we do have lastEmotionsData, display them
+  document.getElementById("emotionsTitle").textContent = "Emotions (Last Message)";
+  renderEmotionsInBars(lastEmotionsData);
+}
+
+async function showAccumEmotions() {
+  console.log("showAccumEmotions() called.");
+
+  const teamName = document.getElementById("teamName").value.trim();
+  const memberName = document.getElementById("memberName").value.trim();
+  if (!teamName || !memberName) {
+    alert("Please enter both team & member name!");
+    return;
+  }
+
+  // We'll call /memberinfo to get the personal accum_emotions for this member
+  const url = `http://127.0.0.1:8000/memberinfo?team_name=${encodeURIComponent(teamName)}&member_name=${encodeURIComponent(memberName)}`;
+
+  try {
+    const resp = await fetch(url);
+    if (resp.status === 404) {
+      // If the user or team not found in DB
+      document.getElementById("emotionsTitle").textContent = "Emotions (Accumulative)";
+      document.getElementById("emotionBars").innerHTML = "<p style='font-size:14px;color:#777;'>This member does not exist in the database.</p>";
+      return;
+    }
+    if (!resp.ok) {
+      throw new Error("Failed to fetch member info");
+    }
+
+    const data = await resp.json();
+    // 'data.accum_emotions' might be an object { "enthusiasm":0.2, ... } or empty
+    const accumEmotions = data.accum_emotions || {};
+
+    // Now display them or show a note if empty
+    document.getElementById("emotionsTitle").textContent = "Emotions (Accumulative)";
+
+    if (!accumEmotions || Object.keys(accumEmotions).length === 0) {
+      document.getElementById("emotionBars").innerHTML = "<p style='font-size:14px;color:#777;'>No emotions yet for this member!</p>";
+    } else {
+      renderEmotionsInBars(accumEmotions);
+    }
+
+  } catch (error) {
+    console.error("Error in showAccumEmotions():", error);
+    alert(error.message);
+  }
+}
+
+  /* AUTO LOAD TEAM INFO => (unchanged) */
+  async function autoLoadTeamInfo(){
+    // e.g. fetch /teaminfo
+    const teamName = document.getElementById("teamName").value.trim();
+    if(!teamName) return;
+    try{
+      const resp = await fetch(`http://127.0.0.1:8000/teaminfo?team_name=${encodeURIComponent(teamName)}`);
+      if(!resp.ok) throw new Error("Could not load team info");
+      const data = await resp.json();
+      updateStageUI(data.distribution, data.final_stage, data.feedback);
+    }catch(err){
+      console.error("Error loading team info", err);
+      alert(err.message);
+    }
+  }
+
+  /* ----------------------------------------------------
+     CONVERSATION MODE
+  ---------------------------------------------------- */
+  /*
+    The updated sendMessage method:
+    - Sends a user message to /chat
+    - Displays the returned team distribution
+    - Stores lastEmotions, accumEmotions internally, then calls showLastEmotions() by default
+  */
+  async function sendMessage() {
+    const teamName = document.getElementById("teamName").value.trim();
+    const memberName = document.getElementById("memberName").value.trim();
+    const userMsg = document.getElementById("userInput").value.trim();
+    const conversationElem = document.getElementById("conversation");
+
+    if (!teamName) {
+      alert("Please enter a team name!");
+      return;
+    }
+    if (!memberName) {
+      alert("Please enter your (member) name!");
+      return;
+    }
+    if (!userMsg) {
+      alert("Please enter a message!");
+      return;
+    }
+
+    // Clear the input
+    document.getElementById("userInput").value = "";
+
+    // Show the user bubble
+    conversationElem.innerHTML += `<div class="bubble user">${userMsg}</div>`;
+    conversationElem.scrollTop = conversationElem.scrollHeight;
+
+    // Show a "Thinking..." bubble
+    const thinkingDiv = document.createElement("div");
+    thinkingDiv.classList.add("bubble", "bot");
+    thinkingDiv.innerHTML = `
+      <span class="spinner"></span>
+      <span style="margin-left:5px;">Thinking...</span>
+    `;
+    conversationElem.appendChild(thinkingDiv);
+    conversationElem.scrollTop = conversationElem.scrollHeight;
+
+    const payload = {
+      text: userMsg,
+      team_name: teamName,
+      member_name: memberName
+    };
+
+    try {
+      const response = await fetch("http://127.0.0.1:8000/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        throw new Error("Failed to connect to the chatbot (conversation mode).");
+      }
+
+      // Remove "Thinking..."
+      conversationElem.removeChild(thinkingDiv);
+
+      // Insert the bot's reply
+      const data = await response.json();
+      const botMessage = data.bot_message || "No response available.";
+      conversationElem.innerHTML += `<div class="bubble bot">${botMessage}</div>`;
+      conversationElem.scrollTop = conversationElem.scrollHeight;
+
+      // The response includes the "team" distribution
+      const distribution = data.distribution || {};
+      const finalStage = data.stage || "Uncertain";
+      const feedback = data.feedback || "";
+
+      // Update the stage bars with the team's distribution
+      updateStageUI(distribution, finalStage, feedback);
+
+      // Now we store the last / accum emotions from the response
+      lastEmotionsData = data.last_emotion_dist || {};
+      accumEmotionsData = data.accum_emotions || {};
+
+      // By default, let's show the last message emotions
+      showLastEmotions();
+
+    } catch (error) {
+      console.error("Error sending message:", error);
+      alert(error.message);
+      if (conversationElem.contains(thinkingDiv)) {
+        conversationElem.removeChild(thinkingDiv);
+      }
+    }
+  }
 
 /********************************************************
   ANALYSIS MODE
@@ -446,3 +504,24 @@ async function uploadFileForAnalysis() {
     alert(error.message);
   }
 }
+
+  /* Return an object so we can call these from HTML, e.g. onclick="App.switchToConversationMode()" */
+  return {
+    switchToConversationMode,
+    switchToAnalysisMode,
+    autoLoadTeamInfo,
+    sendMessage,
+    analyzeConversation,
+    processFileUpload,
+    uploadFileForAnalysis,
+
+    // Stage distribution toggles
+    showTeamStageDistribution,
+    showMyStageDistribution,
+
+    // Emotions toggles
+    showLastEmotions,
+    showAccumEmotions
+  };
+})();
+

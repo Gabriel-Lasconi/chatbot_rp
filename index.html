@@ -308,8 +308,8 @@
       <div id="header">Team Chatbot - Marco</div>
 
       <div id="modeToggle">
-        <button class="mode-btn" id="convBtn" onclick="switchToConversationMode()">Conversation Mode</button>
-        <button class="mode-btn" id="analBtn" onclick="switchToAnalysisMode()">Analysis Mode</button>
+        <button class="mode-btn" id="convBtn" onclick="App.switchToConversationMode()">Conversation Mode</button>
+        <button class="mode-btn" id="analBtn" onclick="App.switchToAnalysisMode()">Analysis Mode</button>
       </div>
 
       <div id="avatar">
@@ -324,7 +324,7 @@
             type="text"
             id="teamName"
             placeholder="Enter Team Name..."
-            onblur="autoLoadTeamInfo()"
+            onblur="App.autoLoadTeamInfo()"
           />
           <input type="text" id="memberName" placeholder="Enter Your Name..." />
         </div>
@@ -332,7 +332,7 @@
         <div id="conversationMode">
           <div id="conversationInput">
             <input type="text" id="userInput" placeholder="Type your message here..." />
-            <button onclick="sendMessage()">Send</button>
+            <button onclick="App.sendMessage()">Send</button>
           </div>
         </div>
 
@@ -341,15 +341,20 @@
             id="analysisInput"
             placeholder="Paste multiple lines here... (each message on one line)"
           ></textarea>
-          <button onclick="analyzeConversation()">Analyze</button>
+          <button onclick="App.analyzeConversation()">Analyze</button>
           <label for="fileUpload">Or upload a chat log file:</label>
-          <input type="file" id="fileUpload" accept=".txt" onchange="processFileUpload()" />
+          <input type="file" id="fileUpload" accept=".txt" onchange="App.processFileUpload()" />
         </div>
       </div>
     </div>
 
     <div id="stageColumn">
-      <div id="stageHeader">Stage Distribution</div>
+      <div id="stageHeader">Stage Distribution (Team Stage)</div>
+
+      <div style="display: flex; gap:10px; padding: 10px; justify-content:center;">
+        <button class="mode-btn" onclick="App.showTeamStageDistribution()">Team Stage</button>
+        <button class="mode-btn" onclick="App.showMyStageDistribution()">My Stage</button>
+      </div>
 
       <div id="finalStageInfo">
         <h3>
@@ -364,8 +369,8 @@
       <!-- Additional panel for emotions -->
       <div id="lastEmotionsInfo">
         <div id="emotionsToggle">
-          <button class="mode-btn" onclick="showLastEmotions()">Last Message</button>
-          <button class="mode-btn" onclick="showAccumEmotions()">Accumulative</button>
+          <button class="mode-btn" onclick="App.showLastEmotions()">Last Message</button>
+          <button class="mode-btn" onclick="App.showAccumEmotions()">Accumulative</button>
         </div>
         <h3 id="emotionsTitle">Emotions (Last Message)</h3>
         <div id="emotionBars"></div>

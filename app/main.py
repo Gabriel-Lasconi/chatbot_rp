@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.db import init_db, SessionLocal, Team
+from app.db import init_db, SessionLocal, Team, Member
 from app.chatbot_generative import ChatbotGenerative
 
 app = FastAPI()
@@ -39,6 +39,7 @@ app.mount("/static", StaticFiles(directory=static_path), name="static")
 
 chatbot = ChatbotGenerative()
 
+# Request Models
 class AnalyzeRequest(BaseModel):
     team_name: str
     member_name: str
@@ -51,11 +52,7 @@ class ChatRequest(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 def root_page():
-    index_path = os.path.join(
-        os.path.dirname(__file__),
-        "..",
-        "index.html"
-    )
+    index_path = os.path.join(os.path.dirname(__file__), "..", "index.html")
     if os.path.exists(index_path):
         with open(index_path, "r", encoding="utf-8") as f:
             html_content = f.read()
@@ -65,6 +62,10 @@ def root_page():
 
 @app.get("/teaminfo")
 def get_team_info(team_name: str = Query(...), db: Session = Depends(get_db)):
+    """
+    Returns the entire team's stage distribution,
+    plus the final stage & feedback if appropriate.
+    """
     team = db.query(Team).filter(Team.name == team_name).first()
     if not team:
         team = Team(name=team_name, current_stage="Uncertain")
@@ -86,22 +87,58 @@ def get_team_info(team_name: str = Query(...), db: Session = Depends(get_db)):
         "feedback": feedback
     }
 
+@app.get("/memberinfo")
+def get_member_info(team_name: str = Query(...), member_name: str = Query(...), db: Session = Depends(get_db)):
+    """
+    Returns the personal Tuckman stage distribution (accum_distribution)
+    for this member, plus the member's current stage, plus optional accum_emotions if you want.
+    """
+    team = db.query(Team).filter(Team.name == team_name).first()
+    if not team:
+        # optionally raise 404 or create
+        raise HTTPException(status_code=404, detail="Team not found.")
+
+    member = db.query(Member).filter(
+        Member.team_id == team.id,
+        Member.name == member_name
+    ).first()
+
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found in this team.")
+
+    personal_dist = member.load_accum_distrib()  # accum_distribution (Tuckman)
+    personal_stage = member.current_stage
+    personal_emotions = member.load_accum_emotions()  # if you want
+
+    return {
+        "distribution": personal_dist,
+        "final_stage": personal_stage,
+        "accum_emotions": personal_emotions
+    }
+
 @app.post("/chat")
 def chat_with_bot(req: ChatRequest, db: Session = Depends(get_db)):
-    # NOW we get 6-tuple:
-    bot_msg, final_stage, feedback, member_dist, last_emotion_dist, accum_emotions = chatbot.process_line(
+    """
+    We return only the *team* distribution from /chat,
+    plus last message and accum emotions (if you want),
+    letting the user call /memberinfo to get their personal distribution.
+    """
+    bot_msg, final_stage, feedback, _, last_emotion_dist, accum_emotions = chatbot.process_line(
         db, req.team_name, req.member_name, req.text
     )
 
     the_team = db.query(Team).filter(Team.name == req.team_name).first()
     team_distribution = the_team.load_team_distribution()
 
-    # return them to the front-end so it can toggle
+    # We do NOT return my_stage_distribution here anymore
+    # since we want the user to call /memberinfo
+    # to get the personal stage distribution.
+
     return {
         "bot_message": bot_msg,
         "stage": final_stage if final_stage else "Uncertain",
         "feedback": feedback if feedback else "",
-        "distribution": team_distribution,
+        "distribution": team_distribution,   # team's distribution
         "last_emotion_dist": last_emotion_dist,
         "accum_emotions": accum_emotions
     }
@@ -121,7 +158,12 @@ def analyze_conversation(req: AnalyzeRequest, db: Session = Depends(get_db)):
     }
 
 @app.post("/analyze-file")
-async def analyze_file(team_name: str, member_name: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def analyze_file(
+    team_name: str,
+    member_name: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
     if not file.filename.endswith(".txt"):
         raise HTTPException(status_code=400, detail="Only .txt files are supported")
 
