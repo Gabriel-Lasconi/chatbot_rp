@@ -5,7 +5,7 @@ from langchain_ollama import OllamaLLM
 class StageMapper:
     def __init__(self):
         """
-        Maps top-five emotions to Tuckman stages. Also provides short feedback for any stage.
+        Maps emotions to Tuckman stages. Also provides short feedback for any stage.
         """
         self.stage_emotion_map = {
             "Forming": ["excitement", "anticipation", "anxiety", "curiosity", "eagerness"],
@@ -18,8 +18,8 @@ class StageMapper:
 
     def get_stage_distribution(self, top5_emotions):
         """
-        Given the top-five emotions (each a dict with 'label' and 'score'),
-        return a dictionary summarizing how much each Tuckman stage is 'activated'.
+        (Unchanged) Given top-5 emotions from a single message,
+        returns how much each Tuckman stage is 'activated.'
         """
         distribution = {stage: 0.0 for stage in self.stage_emotion_map}
 
@@ -30,6 +30,30 @@ class StageMapper:
             if stage_for_emo:
                 distribution[stage_for_emo] += confidence
 
+        total_sum = sum(distribution.values())
+        if total_sum > 0:
+            for stg in distribution:
+                distribution[stg] /= total_sum
+
+        return distribution
+
+    def get_stage_distribution_from_entire_emotions(self, accum_emotions):
+        """
+        NEW METHOD:
+        Given a dict of all the member's emotions (e.g. accum_emotions)
+        -> { "confidence": 0.3, "sadness": 0.2, ... },
+        sum them by Tuckman stage, then normalize.
+        """
+        distribution = {stage: 0.0 for stage in self.stage_emotion_map}
+
+        # For each emotion in accum_emotions:
+        # figure out which stage it belongs to, add its value
+        for emotion_label, value in accum_emotions.items():
+            stage_for_emo = self._which_stage(emotion_label)
+            if stage_for_emo:
+                distribution[stage_for_emo] += value
+
+        # Now normalize
         total_sum = sum(distribution.values())
         if total_sum > 0:
             for stg in distribution:
@@ -48,7 +72,7 @@ class StageMapper:
 
     def get_feedback_for_stage(self, stage: str):
         """
-        Generate short feedback for a specific stage using LLaMA.
+        (Unchanged) Generate short feedback for a specific stage using LLaMA.
         """
         if stage not in self.stage_emotion_map:
             return "No feedback available for this stage."

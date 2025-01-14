@@ -20,7 +20,6 @@ class ChatbotGenerative:
             "Focus on emotional cues and team dynamics, and maintain a polite, clear, and context-aware dialogue."
         )
 
-        # ephemeral dictionary for lines since final stage
         self.lines_since_final_stage = {}
 
     @property
@@ -34,7 +33,6 @@ class ChatbotGenerative:
     def _load_team(self, db, team_name: str):
         team = db.query(Team).filter(Team.name == team_name).first()
         if not team:
-            # create one
             team = Team(name=team_name, current_stage="Uncertain")
             db.add(team)
             db.commit()
@@ -47,7 +45,6 @@ class ChatbotGenerative:
             Member.team_id == team.id
         ).first()
         if not member:
-            # create one
             member = Member(name=member_name, team_id=team.id, current_stage="Uncertain")
             db.add(member)
             db.commit()
@@ -85,8 +82,8 @@ class ChatbotGenerative:
 
     def _compute_team_stage(self, db, team):
         """
-        After we update a member's stage, compute the entire team's
-        average numeric stage and store the combined distribution in team.stage_distribution.
+        After we update each member's stage, compute the team's average numeric stage
+        and store the combined distribution in team.stage_distribution.
         """
         numeric_map = {
             "Forming": 0,
@@ -98,7 +95,6 @@ class ChatbotGenerative:
         }
         stage_names = ["Forming", "Storming", "Norming", "Performing", "Adjourning"]
 
-        # gather numeric stage indices
         valid_stage_vals = []
         for mem in team.members:
             if mem.current_stage in numeric_map and numeric_map[mem.current_stage] is not None:
@@ -109,20 +105,21 @@ class ChatbotGenerative:
         else:
             avg_val = sum(valid_stage_vals) / len(valid_stage_vals)
             idx = int(round(avg_val))
-            if idx < 0: idx = 0
-            if idx > 4: idx = 4
+            if idx < 0:
+                idx = 0
+            if idx > 4:
+                idx = 4
             team.current_stage = stage_names[idx]
 
-        # combine distributions from members
+        # combine all members' accum_distrib for the team distribution
         combined = {s: 0.0 for s in stage_names}
         num_members = 0
         for mem in team.members:
-            dist = mem.load_accum_distrib()  # Tuckman
+            dist = mem.load_accum_distrib()  # member's Tuckman distribution
             if dist:
                 num_members += 1
                 for s in stage_names:
                     combined[s] += dist.get(s, 0.0)
-
         if num_members > 0:
             for s in combined:
                 combined[s] /= num_members
@@ -134,60 +131,49 @@ class ChatbotGenerative:
 
     def process_line(self, db, team_name: str, member_name: str, text: str):
         """
-        Insert a user message, check if it's valuable => detect emotions => accumulate
-        both Tuckman distribution and overall emotion distribution.
-        Return: bot_response, final_stage, feedback, accum_dist, last_emotion_dist, accum_emotions
+        1) Insert user message
+        2) If "Valuable", detect top-5, accumulate *all* user emotions in accum_emotions
+        3) Then derive Tuckman distribution from the entire accum_emotions
+        4) Possibly finalize stage
+        5) Recompute team's stage
+        6) Return everything
         """
-        # 1) load or create team, member
         team = self._load_team(db, team_name)
         member = self._load_member(db, team, member_name)
 
-        # 2) store user message
+        # Create the new user message
         user_msg = Message(member_id=member.id, role="User", text=text)
         db.add(user_msg)
         db.commit()
         db.refresh(user_msg)
 
-        # load Tuckman accum dist
-        accum_dist = member.load_accum_distrib()
+        # Load existing data
+        accum_dist = member.load_accum_distrib()       # Tuckman distribution
+        accum_emotions = member.load_accum_emotions()  # overall emotion distribution
         if not accum_dist:
             accum_dist = {stg: 0.0 for stg in self._stage_mapper.stage_emotion_map.keys()}
-
-        # load accumulative emotions
-        accum_emotions = member.load_accum_emotions()
+        if not accum_emotions:
+            accum_emotions = {}
 
         final_stage = None
         feedback = None
         last_emotion_dist = {}
 
+        # Check message
         is_valuable = self._classify_message_relevance(text)
         if is_valuable:
-            # detect top-5 emotions
+            # 1) detect top-5 emotions for this message
             emotion_results = self.emotion_detector.detect_emotion(text, top_n=5)
             top5_emotions = emotion_results["top_emotions"]
 
-            # store them in the message
+            # store top-5 in the message row
             dist_for_message = {emo["label"]: emo["score"] for emo in top5_emotions}
             user_msg.save_top_emotion_distribution(dist_for_message)
             db.commit()
 
             last_emotion_dist = dist_for_message
 
-            # ACCUMULATE Tuckman distribution
-            line_distribution = self.stage_mapper.get_stage_distribution(top5_emotions)
-            for stg, val in line_distribution.items():
-                accum_dist[stg] += val
-            # re-normalize Tuckman
-            total_sum = sum(accum_dist.values())
-            if total_sum > 0.0:
-                for stg in accum_dist:
-                    accum_dist[stg] /= total_sum
-
-            member.save_accum_distrib(accum_dist)
-
-            # ACCUMULATE overall emotions
-            # We'll just add each emotion's confidence into accum_emotions
-            # and then re-normalize
+            # 2) update accum_emotions (the entire user's total emotional distribution)
             for e_dict in top5_emotions:
                 lbl = e_dict["label"]
                 conf = e_dict["score"]
@@ -197,25 +183,32 @@ class ChatbotGenerative:
             sum_emotions = sum(accum_emotions.values())
             if sum_emotions > 0.0:
                 for e_lbl in accum_emotions:
-                    accum_emotions[e_lbl] = accum_emotions[e_lbl] / sum_emotions
+                    accum_emotions[e_lbl] /= sum_emotions
 
             member.save_accum_emotions(accum_emotions)
+            db.commit()
 
+            # 3) Re-derive the Tuckman distribution from the entire accum_emotions
+            # using the new method in stage_mapping
+            entire_dist = self.stage_mapper.get_stage_distribution_from_entire_emotions(accum_emotions)
+            member.save_accum_distrib(entire_dist)
+
+            # (Optional) finalize the stage if user has enough lines
             member.num_lines += 1
             db.commit()
 
-            # ephemeral lines
+            # ephemeral lines track
             key_for_ephemeral = (team_name, member_name)
             if key_for_ephemeral not in self.lines_since_final_stage:
                 self.lines_since_final_stage[key_for_ephemeral] = 0
             self.lines_since_final_stage[key_for_ephemeral] += 1
 
-            # check if we can finalize stage
+            # if user has >=3 lines, possibly finalize the stage
             if member.num_lines >= 3:
-                # find best stage in accum_dist
+                # find the highest stage in entire_dist
                 best_sum = 0.0
                 best_stage = None
-                for s, v in accum_dist.items():
+                for s, v in entire_dist.items():
                     if v > best_sum:
                         best_sum = v
                         best_stage = s
@@ -230,11 +223,9 @@ class ChatbotGenerative:
         # Recompute the entire team's stage
         self._compute_team_stage(db, team)
 
-        # Build conversation prompt
-        all_msgs = []
-        for mem in team.members:
-            for m in mem.messages:
-                all_msgs.append(m)
+        # Build conversation string for prompt
+        all_msgs = db.query(Message).join(Member).filter(Member.team_id == team.id).all()
+        # or do the old approach
         all_msgs.sort(key=lambda x: x.id)
 
         lines_for_prompt = []
@@ -242,13 +233,12 @@ class ChatbotGenerative:
             if msg.role.lower() == "assistant":
                 lines_for_prompt.append(f"Assistant: {msg.text}")
             else:
-                # optionally show "User ({mem.name})"
                 lines_for_prompt.append(
-                    f"User ({mem.name}): {msg.text}" if msg.member_id == mem.id else f"User: {msg.text}"
+                    f"User ({msg.member.name}): {msg.text}"
                 )
         conversation_str = "\n".join(lines_for_prompt)
 
-        # generate final assistant response
+        # generate final LLaMA answer
         bot_response = self._generate_response(conversation_str, text)
         assistant_msg = Message(
             member_id=member.id,
@@ -267,7 +257,7 @@ class ChatbotGenerative:
         feedback = None
         accum_dist = {}
         for line in lines:
-            # note: we get 6-tuple but ignoring last 2
+            # ignoring last 2 returns
             bot_msg, concluded_stage, concluded_feedback, accum_dist, _, _ = self.process_line(
                 db, team_name, member_name, line
             )
@@ -282,16 +272,16 @@ class ChatbotGenerative:
             team.current_stage = "Uncertain"
             for member in team.members:
                 member.current_stage = "Uncertain"
-                dist_reset = {stg: 0.0 for stg in self._stage_mapper.stage_emotion_map.keys()}
-                member.save_accum_distrib(dist_reset)
+                # reset Tuckman dist
+                member.save_accum_distrib({})
                 member.num_lines = 0
-                # also reset accum_emotions
+                # reset accum_emotions
                 member.save_accum_emotions({})
                 db.query(Message).filter(Message.member_id == member.id).delete()
                 db.commit()
             db.commit()
 
-        # reset ephemeral counters
+        # ephemeral counters
         keys_to_delete = []
         for (t_name, m_name) in self.lines_since_final_stage:
             if t_name == team_name:

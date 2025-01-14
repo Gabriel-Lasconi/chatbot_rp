@@ -118,16 +118,42 @@ function createStageBarHTML(label, widthPercent, actualPercent, diffHtml = "") {
 /**
  * Show an emotions dictionary as bars
  */
+// function renderEmotionsInBars(emotions) {
+//   const emotionBarsElem = document.getElementById("emotionBars");
+//   emotionBarsElem.innerHTML = "";
+//
+//   if (!emotions || Object.keys(emotions).length === 0) {
+//     emotionBarsElem.innerHTML = "<p style='font-size:14px;color:#777;'>No emotions detected.</p>";
+//     return;
+//   }
+//
+//   for (const [emotionLabel, rawValue] of Object.entries(emotions)) {
+//     const widthPercent = (rawValue * 100).toFixed(2);
+//     emotionBarsElem.innerHTML += createStageBarHTML(emotionLabel, widthPercent, widthPercent);
+//   }
+// }
+
 function renderEmotionsInBars(emotions) {
   const emotionBarsElem = document.getElementById("emotionBars");
   emotionBarsElem.innerHTML = "";
 
-  if (!emotions || Object.keys(emotions).length === 0) {
+  // Convert the {emotionLabel: value} object to an array of [label, value]
+  let entries = Object.entries(emotions);
+
+  // Sort descending by value
+  entries.sort((a, b) => b[1] - a[1]);
+
+  // Slice the first 10
+  const top7 = entries.slice(0, 10);
+
+  // If there's nothing to display, show a small message
+  if (top7.length === 0) {
     emotionBarsElem.innerHTML = "<p style='font-size:14px;color:#777;'>No emotions detected.</p>";
     return;
   }
 
-  for (const [emotionLabel, rawValue] of Object.entries(emotions)) {
+  // Render each of the top-7 as a bar
+  for (const [emotionLabel, rawValue] of top7) {
     const widthPercent = (rawValue * 100).toFixed(2);
     emotionBarsElem.innerHTML += createStageBarHTML(emotionLabel, widthPercent, widthPercent);
   }
