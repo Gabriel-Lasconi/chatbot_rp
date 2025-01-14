@@ -250,17 +250,11 @@
       font-size: 14px;
       font-weight: 600;
       color: #555;
-      width: 60px; /* Increase to make it smaller */
+      width: 60px; /* or slightly bigger if needed */
       text-align: right;
     }
 
-    /* If you want a separate container for the delta text, you can add: */
-    /* .stageDiff {*/
-    /*   width: 60px;*/
-    /*   text-align: right;*/
-    /*   font-size: 0.9em;*/
-    /*} */
-    /* Additional section for Last Message Emotions */
+    /* Emotions Section */
     #lastEmotionsInfo {
       padding: 20px;
       border-top: none;
@@ -278,6 +272,14 @@
       flex-direction: column;
       gap: 10px;
     }
+
+    /* The toggle container for last vs. accumulative emotions */
+    #emotionsToggle {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
     .spinner {
       border: 4px solid #f3f3f3;
       border-top: 4px solid #4a90e2;
@@ -329,11 +331,7 @@
 
         <div id="conversationMode">
           <div id="conversationInput">
-            <input
-              type="text"
-              id="userInput"
-              placeholder="Type your message here..."
-            />
+            <input type="text" id="userInput" placeholder="Type your message here..." />
             <button onclick="sendMessage()">Send</button>
           </div>
         </div>
@@ -363,9 +361,13 @@
 
       <div id="stageBars"></div>
 
-      <!-- Additional panel for the last user message's emotions -->
+      <!-- Additional panel for emotions -->
       <div id="lastEmotionsInfo">
-        <h3>Emotions detected in the last message:</h3>
+        <div id="emotionsToggle">
+          <button class="mode-btn" onclick="showLastEmotions()">Last Message</button>
+          <button class="mode-btn" onclick="showAccumEmotions()">Accumulative</button>
+        </div>
+        <h3 id="emotionsTitle">Emotions (Last Message)</h3>
         <div id="emotionBars"></div>
       </div>
     </div>

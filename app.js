@@ -1,7 +1,9 @@
 /* ----------------------------------------------------
-   Global variable to track previous distribution
+   Global variables to track distributions and emotions
 ---------------------------------------------------- */
 let previousDistribution = null;
+let lastEmotionsData = {};     // last single-message emotions
+let accumEmotionsData = {};    // accumulative (overall) emotions
 
 /********************************************************
   MODE SWITCHING + CLEARING
@@ -51,11 +53,12 @@ function resetStageUI() {
   document.getElementById("finalStageSpan").textContent = "Uncertain";
   document.getElementById("stageFeedback").textContent = "";
 
-  // Reset last message emotion bars
-  const emotionBarsElem = document.getElementById("emotionBars");
-  emotionBarsElem.innerHTML = "<p style='font-size:14px;color:#777;'>No emotions detected.</p>";
+  // Reset the emotions
+  lastEmotionsData = {};
+  accumEmotionsData = {};
+  document.getElementById("emotionsTitle").textContent = "Emotions (Last Message)";
+  document.getElementById("emotionBars").innerHTML = "<p style='font-size:14px;color:#777;'>No emotions detected.</p>";
 
-  // Reset our previous distribution
   previousDistribution = null;
 }
 
@@ -70,21 +73,17 @@ function updateStageUI(distribution, finalStage, feedback) {
   const stageOrder = ["Forming", "Storming", "Norming", "Performing", "Adjourning"];
 
   stageOrder.forEach(stageName => {
-    // Current value (0..1)
     const currentVal = distribution[stageName] || 0;
     const currentPercent = (currentVal * 100).toFixed(2);
 
-    // Compute difference if we have a previousDistribution
     let diffHtml = "";
     if (previousDistribution) {
       const oldVal = previousDistribution[stageName] || 0;
       const oldPercent = oldVal * 100;
-      const diff = (currentVal * 100) - oldPercent; // difference in percentage points
-
+      const diff = (currentVal * 100) - oldPercent;
       if (Math.abs(diff) > 0.001) {
-        // Show difference if it's not trivial
         const sign = diff > 0 ? "+" : "";
-        const diffColor = diff > 0 ? "#28a745" : "#dc3545"; // green for +, red for -
+        const diffColor = diff > 0 ? "#28a745" : "#dc3545";
         diffHtml = ` <span style="color:${diffColor}; font-size:0.9em;">
           (${sign}${diff.toFixed(2)}%)
         </span>`;
@@ -94,11 +93,9 @@ function updateStageUI(distribution, finalStage, feedback) {
     stageBarsElem.innerHTML += createStageBarHTML(stageName, currentPercent, currentPercent, diffHtml);
   });
 
-  // Update final stage and feedback
   document.getElementById("finalStageSpan").textContent = finalStage || "Uncertain";
   document.getElementById("stageFeedback").textContent = feedback || "";
 
-  // Update previousDistribution
   previousDistribution = { ...distribution };
 }
 
@@ -119,9 +116,9 @@ function createStageBarHTML(label, widthPercent, actualPercent, diffHtml = "") {
 }
 
 /**
- * Update the last message's emotions in a separate panel.
+ * Show an emotions dictionary as bars
  */
-function updateEmotionsUI(emotions) {
+function renderEmotionsInBars(emotions) {
   const emotionBarsElem = document.getElementById("emotionBars");
   emotionBarsElem.innerHTML = "";
 
@@ -132,9 +129,26 @@ function updateEmotionsUI(emotions) {
 
   for (const [emotionLabel, rawValue] of Object.entries(emotions)) {
     const widthPercent = (rawValue * 100).toFixed(2);
-    // Reuse the same bar-creation approach
     emotionBarsElem.innerHTML += createStageBarHTML(emotionLabel, widthPercent, widthPercent);
   }
+}
+
+/**
+ * Toggle to show last message emotions
+ */
+function showLastEmotions() {
+  console.log("showLastEmotions() called. Data:", lastEmotionsData);
+  document.getElementById("emotionsTitle").textContent = "Emotions (Last Message)";
+  renderEmotionsInBars(lastEmotionsData);
+}
+
+/**
+ * Toggle to show accumulative emotions
+ */
+function showAccumEmotions() {
+  console.log("showAccumEmotions() called. Data:", accumEmotionsData);
+  document.getElementById("emotionsTitle").textContent = "Emotions (Accumulative)";
+  renderEmotionsInBars(accumEmotionsData);
 }
 
 /********************************************************
@@ -149,7 +163,6 @@ async function autoLoadTeamInfo() {
     const resp = await fetch(`http://127.0.0.1:8000/teaminfo?team_name=${encodeURIComponent(teamName)}`);
     if (!resp.ok) throw new Error("Could not load team info");
     const data = await resp.json();
-    // data: { distribution, final_stage, feedback }
     updateStageUI(data.distribution, data.final_stage, data.feedback);
   } catch (err) {
     console.error("Error loading team info:", err);
@@ -186,11 +199,11 @@ async function sendMessage() {
   // Clear input immediately
   userInputElem.value = "";
 
-  // Show user's message in the chat
+  // Show user's message
   conversationElem.innerHTML += `<div class="bubble user">${userMsg}</div>`;
   conversationElem.scrollTop = conversationElem.scrollHeight;
 
-  // Show a "Thinking..." bubble (with spinner)
+  // Show "Thinking..."
   const thinkingDiv = document.createElement("div");
   thinkingDiv.classList.add("bubble", "bot");
   thinkingDiv.innerHTML = `
@@ -217,10 +230,10 @@ async function sendMessage() {
       throw new Error("Failed to connect to the chatbot (conversation mode).");
     }
 
-    // Remove the "Thinking..." bubble
+    // Remove "Thinking..."
     conversationElem.removeChild(thinkingDiv);
 
-    // Display the bot's actual response
+    // Show bot response
     const data = await response.json();
     const botMessage = data.bot_message || "No response available.";
     conversationElem.innerHTML += `<div class="bubble bot">${botMessage}</div>`;
@@ -232,15 +245,17 @@ async function sendMessage() {
     const feedback = data.feedback || "";
     updateStageUI(distribution, finalStage, feedback);
 
-    // Update last message’s emotions
-    const lastEmotions = data.last_emotion_dist || {};
-    updateEmotionsUI(lastEmotions);
+    // IMPORTANT: retrieve both last and accum emotions
+    lastEmotionsData = data.last_emotion_dist || {};
+    accumEmotionsData = data.accum_emotions || {};
+
+    // By default show last message emotions
+    showLastEmotions(); // or showAccumEmotions();
 
   } catch (error) {
     console.error("Error sending message:", error);
     alert(error.message);
 
-    // If error, remove the "Thinking..." bubble
     if (conversationElem.contains(thinkingDiv)) {
       conversationElem.removeChild(thinkingDiv);
     }
@@ -300,7 +315,7 @@ async function analyzeConversation() {
     const feedback = data.feedback || "";
     const distribution = data.distribution || {};
 
-    // Show a short note in conversation
+    // Add a short note
     conversationElem.innerHTML += `
       <div class="bubble user" style="font-style:italic;">
         (Analyzed ${lines.length} lines for team: ${teamName}, member: ${memberName})
@@ -311,8 +326,7 @@ async function analyzeConversation() {
     // Update stage distribution
     updateStageUI(distribution, finalStage, feedback);
 
-    // If you want to show lastEmotions here, you'd need the server to return them.
-    // For now, we assume it doesn't.
+    // If you want lastEmotions / accumEmotions after analysis, your server must return them.
 
   } catch (error) {
     console.error("Error analyzing conversation:", error);

@@ -15,7 +15,7 @@ class EmotionDetector:
             "nostalgia", "closure", "sadness", "reflection"
         ]
 
-    def detect_emotion(self, text: str, top_n: int = 5):
+    def detect_emotion(self, text: str, top_n: int = 7):
         """
         Detect top emotions using zero-shot classification.
         """

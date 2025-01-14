@@ -71,11 +71,7 @@ def get_team_info(team_name: str = Query(...), db: Session = Depends(get_db)):
         db.add(team)
         db.commit()
         db.refresh(team)
-        return {
-            "distribution": {},
-            "final_stage": "Uncertain",
-            "feedback": ""
-        }
+        return {"distribution": {}, "final_stage": "Uncertain", "feedback": ""}
 
     distribution = team.load_team_distribution()
     final_stage = team.current_stage
@@ -92,19 +88,22 @@ def get_team_info(team_name: str = Query(...), db: Session = Depends(get_db)):
 
 @app.post("/chat")
 def chat_with_bot(req: ChatRequest, db: Session = Depends(get_db)):
-    bot_msg, final_stage, feedback, member_dist, last_emotion_dist = chatbot.process_line(
+    # NOW we get 6-tuple:
+    bot_msg, final_stage, feedback, member_dist, last_emotion_dist, accum_emotions = chatbot.process_line(
         db, req.team_name, req.member_name, req.text
     )
 
     the_team = db.query(Team).filter(Team.name == req.team_name).first()
     team_distribution = the_team.load_team_distribution()
 
+    # return them to the front-end so it can toggle
     return {
         "bot_message": bot_msg,
         "stage": final_stage if final_stage else "Uncertain",
         "feedback": feedback if feedback else "",
         "distribution": team_distribution,
-        "last_emotion_dist": last_emotion_dist  # <--- we pass the last msg's emotions to front-end
+        "last_emotion_dist": last_emotion_dist,
+        "accum_emotions": accum_emotions
     }
 
 @app.post("/analyze")
@@ -112,7 +111,6 @@ def analyze_conversation(req: AnalyzeRequest, db: Session = Depends(get_db)):
     final_stage, feedback, _ = chatbot.analyze_conversation_db(
         db, req.team_name, req.member_name, req.lines
     )
-
     the_team = db.query(Team).filter(Team.name == req.team_name).first()
     team_distribution = the_team.load_team_distribution()
 
@@ -123,12 +121,7 @@ def analyze_conversation(req: AnalyzeRequest, db: Session = Depends(get_db)):
     }
 
 @app.post("/analyze-file")
-async def analyze_file(
-    team_name: str,
-    member_name: str,
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db)
-):
+async def analyze_file(team_name: str, member_name: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
     if not file.filename.endswith(".txt"):
         raise HTTPException(status_code=400, detail="Only .txt files are supported")
 
@@ -147,13 +140,8 @@ async def analyze_file(
 
 @app.post("/reset")
 def reset_team(req: ChatRequest, db: Session = Depends(get_db)):
-    """
-    Reset a team's conversation state in the DB.
-    (Also resets members' states and messages.)
-    """
     chatbot.reset_team(db, req.team_name)
     return {"message": f"Team '{req.team_name}' has been reset."}
-
 
 if __name__ == "__main__":
     import uvicorn
