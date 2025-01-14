@@ -1,5 +1,3 @@
-# main.py
-
 import os
 from typing import List
 
@@ -39,7 +37,6 @@ app.mount("/static", StaticFiles(directory=static_path), name="static")
 
 chatbot = ChatbotGenerative()
 
-# Request Models
 class AnalyzeRequest(BaseModel):
     team_name: str
     member_name: str
@@ -62,10 +59,6 @@ def root_page():
 
 @app.get("/teaminfo")
 def get_team_info(team_name: str = Query(...), db: Session = Depends(get_db)):
-    """
-    Returns the entire team's stage distribution,
-    plus the final stage & feedback if appropriate.
-    """
     team = db.query(Team).filter(Team.name == team_name).first()
     if not team:
         team = Team(name=team_name, current_stage="Uncertain")
@@ -89,13 +82,8 @@ def get_team_info(team_name: str = Query(...), db: Session = Depends(get_db)):
 
 @app.get("/memberinfo")
 def get_member_info(team_name: str = Query(...), member_name: str = Query(...), db: Session = Depends(get_db)):
-    """
-    Returns the personal Tuckman stage distribution (accum_distribution)
-    for this member, plus the member's current stage, plus optional accum_emotions if you want.
-    """
     team = db.query(Team).filter(Team.name == team_name).first()
     if not team:
-        # optionally raise 404 or create
         raise HTTPException(status_code=404, detail="Team not found.")
 
     member = db.query(Member).filter(
@@ -106,9 +94,9 @@ def get_member_info(team_name: str = Query(...), member_name: str = Query(...), 
     if not member:
         raise HTTPException(status_code=404, detail="Member not found in this team.")
 
-    personal_dist = member.load_accum_distrib()  # accum_distribution (Tuckman)
+    personal_dist = member.load_accum_distrib()
     personal_stage = member.current_stage
-    personal_emotions = member.load_accum_emotions()  # if you want
+    personal_emotions = member.load_accum_emotions()
 
     return {
         "distribution": personal_dist,
@@ -118,27 +106,22 @@ def get_member_info(team_name: str = Query(...), member_name: str = Query(...), 
 
 @app.post("/chat")
 def chat_with_bot(req: ChatRequest, db: Session = Depends(get_db)):
-    """
-    We return only the *team* distribution from /chat,
-    plus last message and accum emotions (if you want),
-    letting the user call /memberinfo to get their personal distribution.
-    """
-    bot_msg, final_stage, feedback, _, last_emotion_dist, accum_emotions = chatbot.process_line(
-        db, req.team_name, req.member_name, req.text
+    # We now expect 7 items from process_line
+    (bot_msg, final_stage, feedback,
+     accum_dist, last_emotion_dist,
+     accum_emotions, personal_feedback) = chatbot.process_line(
+         db, req.team_name, req.member_name, req.text
     )
 
     the_team = db.query(Team).filter(Team.name == req.team_name).first()
     team_distribution = the_team.load_team_distribution()
 
-    # We do NOT return my_stage_distribution here anymore
-    # since we want the user to call /memberinfo
-    # to get the personal stage distribution.
-
     return {
         "bot_message": bot_msg,
         "stage": final_stage if final_stage else "Uncertain",
         "feedback": feedback if feedback else "",
-        "distribution": team_distribution,   # team's distribution
+        "distribution": team_distribution,
+        "my_stage_feedback": personal_feedback if personal_feedback else "",
         "last_emotion_dist": last_emotion_dist,
         "accum_emotions": accum_emotions
     }

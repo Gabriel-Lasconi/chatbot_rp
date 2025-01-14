@@ -1,19 +1,11 @@
 /* app.js */
-
-/*
-  Wrap everything in an IIFE that returns "App"
-  => Only one global variable: "App".
-*/
 const App = (function() {
+  // PRIVATE STATE in closure, if you want to store lastEmotions, accumEmotions, etc.
+  let previousDistribution = null; // for stage distribution deltas
+  let lastEmotionsData = {};
+  let accumEmotionsData = {};
 
-  // Private local state in closure
-  let previousDistribution = null;
-  let lastEmotionsData = null;
-
-  // For toggling: We store the team's distribution vs. member's distribution
-  // But we won't keep them globally. We'll fetch them from endpoints on demand.
-
-  /* Reusable UI resets */
+  // UTILITY
   function clearConversation() {
     document.getElementById("conversation").innerHTML = "";
   }
@@ -25,7 +17,7 @@ const App = (function() {
     document.getElementById("stageBars").innerHTML = "";
   }
 
-  /* MODE SWITCHING */
+  // MODE SWITCH
   function switchToConversationMode() {
     const confirmed = confirm("Switch to conversation mode? This will erase the current chat history. Continue?");
     if(!confirmed) return;
@@ -52,7 +44,7 @@ const App = (function() {
     resetStageUI();
   }
 
-  /* STAGE / FEEDBACK UI */
+  // RENDER STAGE
   function updateStageUI(distribution, finalStage, feedback) {
     const stageBarsElem = document.getElementById("stageBars");
     stageBarsElem.innerHTML = "";
@@ -64,14 +56,16 @@ const App = (function() {
       const currentPercent = (currentVal*100).toFixed(2);
 
       let diffHtml = "";
-      if(previousDistribution) {
+      if(previousDistribution){
         const oldVal = previousDistribution[stageName] || 0;
         const oldPercent = oldVal*100;
         const diff = (currentVal*100) - oldPercent;
-        if(Math.abs(diff)>0.01){
-          const sign = (diff>0)? "+":"";
-          const diffColor = (diff>0)? "#28a745":"#dc3545";
-          diffHtml = ` <span style="color:${diffColor}; font-size:0.9em;">(${sign}${diff.toFixed(2)}%)</span>`;
+        if(Math.abs(diff)>0.001){
+          const sign = diff>0? "+" : "";
+          const diffColor = diff>0? "#28a745":"#dc3545";
+          diffHtml = ` <span style="color:${diffColor}; font-size:0.9em;">
+            (${sign}${diff.toFixed(2)}%)
+          </span>`;
         }
       }
 
@@ -84,7 +78,7 @@ const App = (function() {
     previousDistribution = {...distribution};
   }
 
-  function createStageBarHTML(label, widthPercent, actualPercent, diffHtml="") {
+  function createStageBarHTML(label, widthPercent, actualPercent, diffHtml=""){
     return `
       <div class="stageBarContainer">
         <span class="stageLabel">${label}:</span>
@@ -97,68 +91,56 @@ const App = (function() {
     `;
   }
 
-/* Show the TEAM distribution */
-async function showTeamStageDistribution() {
-  console.log("showTeamStageDistribution() called");
+  // TEAM vs MY STAGE
+  async function showTeamStageDistribution() {
+    console.log("showTeamStageDistribution() called");
+    // set the heading
 
-  // 1) Update the heading text
-  document.getElementById("stageHeader").textContent = "Stage Distribution (Team Stage)";
-
-  // 2) Get the team name, ensure non-empty
-  const teamName = document.getElementById("teamName").value.trim();
-  if (!teamName) {
-    alert("Please enter a team name first!");
-    return;
+    const teamName = document.getElementById("teamName").value.trim();
+    if(!teamName){
+      alert("Please enter a team name first!");
+      return;
+    }
+    document.getElementById("stageHeader").textContent = "Stage Distribution (Team Stage)";
+    try {
+      const resp = await fetch(`http://127.0.0.1:8000/teaminfo?team_name=${encodeURIComponent(teamName)}`);
+      if(!resp.ok) throw new Error("Could not load team distribution");
+      const data = await resp.json();
+      // data => { distribution, final_stage, feedback }
+      updateStageUI(data.distribution, data.final_stage, data.feedback);
+    } catch(err){
+      alert(err.message);
+    }
   }
 
-  // 3) Call /teaminfo to fetch the entire team's distribution
-  try {
-    const resp = await fetch(`http://127.0.0.1:8000/teaminfo?team_name=${encodeURIComponent(teamName)}`);
-    if (!resp.ok) throw new Error("Could not load team distribution");
-    const data = await resp.json();
-    // data => { distribution, final_stage, feedback }
-    updateStageUI(data.distribution, data.final_stage, data.feedback);
-  } catch (err) {
-    alert(err.message);
+  async function showMyStageDistribution() {
+
+    console.log("showMyStageDistribution() called");
+    // set the heading
+
+    const teamName = document.getElementById("teamName").value.trim();
+    const memberName = document.getElementById("memberName").value.trim();
+    if(!teamName || !memberName){
+      alert("Please enter a team and member name first!");
+      return;
+    }
+    document.getElementById("stageHeader").textContent = "Stage Distribution (My Stage)";
+    try {
+      const resp = await fetch(
+        `http://127.0.0.1:8000/memberinfo?team_name=${encodeURIComponent(teamName)}&member_name=${encodeURIComponent(memberName)}`
+      );
+      if(!resp.ok) throw new Error("Could not load member info");
+      const data = await resp.json();
+      // data => { distribution, final_stage, accum_emotions? }
+
+      updateStageUI(data.distribution, data.final_stage, "");
+    } catch(err){
+      alert(err.message);
+    }
   }
-}
 
-/* Show the PERSONAL (Member) distribution */
-async function showMyStageDistribution() {
-  console.log("showMyStageDistribution() called");
-
-  // 1) Update the heading text
-  document.getElementById("stageHeader").textContent = "Stage Distribution (My Stage)";
-
-  // 2) Get the team & member name, ensure non-empty
-  const teamName = document.getElementById("teamName").value.trim();
-  const memberName = document.getElementById("memberName").value.trim();
-  if (!teamName || !memberName) {
-    alert("Please enter a team and member name first!");
-    return;
-  }
-
-  // 3) Call /memberinfo to get the personal distribution
-  try {
-    const resp = await fetch(
-      `http://127.0.0.1:8000/memberinfo?team_name=${encodeURIComponent(teamName)}&member_name=${encodeURIComponent(memberName)}`
-    );
-    if (!resp.ok) throw new Error("Could not load member info");
-    const data = await resp.json();
-    // data => { distribution, final_stage, accum_emotions? }
-
-    updateStageUI(data.distribution, data.final_stage, "");
-  } catch (err) {
-    alert(err.message);
-  }
-}
-
-  /* EMOTIONS TOGGLE => We'll fetch from /chat or do last known?
-     We'll keep a small local store for lastEmotions, accumEmotions
-     if we want. That might come from /chat or /memberinfo in a
-     real bigger design.
-  */
-  function renderEmotionsInBars(emotions) {
+  // EMOTIONS
+  function renderEmotionsInBars(emotions){
     const emotionBarsElem = document.getElementById("emotionBars");
     emotionBarsElem.innerHTML = "";
 
@@ -170,127 +152,105 @@ async function showMyStageDistribution() {
       emotionBarsElem.innerHTML = "<p style='font-size:14px;color:#777;'>No emotions detected.</p>";
       return;
     }
-    for(const [lbl,val] of top10){
+    for(const [emo, val] of top10){
       const pct=(val*100).toFixed(2);
-      emotionBarsElem.innerHTML += createStageBarHTML(lbl, pct, pct);
+      emotionBarsElem.innerHTML += createStageBarHTML(emo, pct, pct);
     }
   }
 
-  function showLastEmotions() {
-  console.log("showLastEmotions() called.");
-
-  // If there's no lastEmotionsData (from /chat) or it's empty, show a note:
-  if (!lastEmotionsData || Object.keys(lastEmotionsData).length === 0) {
+  function showLastEmotions(){
+    console.log("showLastEmotions() called");
     document.getElementById("emotionsTitle").textContent = "Emotions (Last Message)";
-    const emotionBarsElem = document.getElementById("emotionBars");
-    emotionBarsElem.innerHTML = "<p style='font-size:14px;color:#777;'>No emotions detected yet. Please write a message!</p>";
-    return;
-  }
 
-  // If we do have lastEmotionsData, display them
-  document.getElementById("emotionsTitle").textContent = "Emotions (Last Message)";
-  renderEmotionsInBars(lastEmotionsData);
-}
-
-async function showAccumEmotions() {
-  console.log("showAccumEmotions() called.");
-
-  const teamName = document.getElementById("teamName").value.trim();
-  const memberName = document.getElementById("memberName").value.trim();
-  if (!teamName || !memberName) {
-    alert("Please enter both team & member name!");
-    return;
-  }
-
-  // We'll call /memberinfo to get the personal accum_emotions for this member
-  const url = `http://127.0.0.1:8000/memberinfo?team_name=${encodeURIComponent(teamName)}&member_name=${encodeURIComponent(memberName)}`;
-
-  try {
-    const resp = await fetch(url);
-    if (resp.status === 404) {
-      // If the user or team not found in DB
-      document.getElementById("emotionsTitle").textContent = "Emotions (Accumulative)";
-      document.getElementById("emotionBars").innerHTML = "<p style='font-size:14px;color:#777;'>This member does not exist in the database.</p>";
+    // if lastEmotionsData is empty => show no emotions
+    if(!lastEmotionsData || Object.keys(lastEmotionsData).length===0){
+      document.getElementById("emotionBars").innerHTML = "<p style='font-size:14px;color:#777;'>No emotions detected yet. Please write a message!</p>";
       return;
     }
-    if (!resp.ok) {
-      throw new Error("Failed to fetch member info");
+    renderEmotionsInBars(lastEmotionsData);
+  }
+
+  async function showAccumEmotions(){
+    console.log("showAccumEmotions() called");
+
+    // If we want to fetch from /memberinfo each time:
+    const teamName = document.getElementById("teamName").value.trim();
+    const memberName = document.getElementById("memberName").value.trim();
+    if(!teamName || !memberName){
+      alert("Please enter both team & member name!");
+      return;
     }
 
-    const data = await resp.json();
-    // 'data.accum_emotions' might be an object { "enthusiasm":0.2, ... } or empty
-    const accumEmotions = data.accum_emotions || {};
-
-    // Now display them or show a note if empty
     document.getElementById("emotionsTitle").textContent = "Emotions (Accumulative)";
 
-    if (!accumEmotions || Object.keys(accumEmotions).length === 0) {
-      document.getElementById("emotionBars").innerHTML = "<p style='font-size:14px;color:#777;'>No emotions yet for this member!</p>";
-    } else {
-      renderEmotionsInBars(accumEmotions);
+    try {
+      const resp = await fetch(
+        `http://127.0.0.1:8000/memberinfo?team_name=${encodeURIComponent(teamName)}&member_name=${encodeURIComponent(memberName)}`
+      );
+      if(resp.status===404){
+        document.getElementById("emotionBars").innerHTML="<p style='font-size:14px;color:#777;'>Member not found in DB.</p>";
+        return;
+      }
+      if(!resp.ok) throw new Error("Could not load member info");
+      const data = await resp.json();
+      const accumEmo = data.accum_emotions || {};
+
+      if(!accumEmo || Object.keys(accumEmo).length===0){
+        document.getElementById("emotionBars").innerHTML="<p style='font-size:14px;color:#777;'>No emotions yet for this member!</p>";
+        return;
+      }
+      renderEmotionsInBars(accumEmo);
+    }catch(error){
+      console.error("Error in showAccumEmotions", error);
+      alert(error.message);
     }
-
-  } catch (error) {
-    console.error("Error in showAccumEmotions():", error);
-    alert(error.message);
   }
-}
 
-  /* AUTO LOAD TEAM INFO => (unchanged) */
+  // AUTO LOAD TEAM INFO
   async function autoLoadTeamInfo(){
-    // e.g. fetch /teaminfo
     const teamName = document.getElementById("teamName").value.trim();
     if(!teamName) return;
-    try{
+    try {
       const resp = await fetch(`http://127.0.0.1:8000/teaminfo?team_name=${encodeURIComponent(teamName)}`);
       if(!resp.ok) throw new Error("Could not load team info");
       const data = await resp.json();
       updateStageUI(data.distribution, data.final_stage, data.feedback);
-    }catch(err){
+    } catch(err){
       console.error("Error loading team info", err);
       alert(err.message);
     }
   }
 
-  /* ----------------------------------------------------
-     CONVERSATION MODE
-  ---------------------------------------------------- */
-  /*
-    The updated sendMessage method:
-    - Sends a user message to /chat
-    - Displays the returned team distribution
-    - Stores lastEmotions, accumEmotions internally, then calls showLastEmotions() by default
-  */
-  async function sendMessage() {
+  // SEND A MESSAGE => calls /chat
+  async function sendMessage(){
     const teamName = document.getElementById("teamName").value.trim();
     const memberName = document.getElementById("memberName").value.trim();
     const userMsg = document.getElementById("userInput").value.trim();
     const conversationElem = document.getElementById("conversation");
 
-    if (!teamName) {
+    if(!teamName){
       alert("Please enter a team name!");
       return;
     }
-    if (!memberName) {
+    if(!memberName){
       alert("Please enter your (member) name!");
       return;
     }
-    if (!userMsg) {
+    if(!userMsg){
       alert("Please enter a message!");
       return;
     }
 
-    // Clear the input
-    document.getElementById("userInput").value = "";
+    document.getElementById("userInput").value="";
 
-    // Show the user bubble
+    // user bubble
     conversationElem.innerHTML += `<div class="bubble user">${userMsg}</div>`;
     conversationElem.scrollTop = conversationElem.scrollHeight;
 
-    // Show a "Thinking..." bubble
+    // thinking
     const thinkingDiv = document.createElement("div");
-    thinkingDiv.classList.add("bubble", "bot");
-    thinkingDiv.innerHTML = `
+    thinkingDiv.classList.add("bubble","bot");
+    thinkingDiv.innerHTML=`
       <span class="spinner"></span>
       <span style="margin-left:5px;">Thinking...</span>
     `;
@@ -306,41 +266,40 @@ async function showAccumEmotions() {
     try {
       const response = await fetch("http://127.0.0.1:8000/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {"Content-Type":"application/json"},
         body: JSON.stringify(payload)
       });
-      if (!response.ok) {
+      if(!response.ok){
         throw new Error("Failed to connect to the chatbot (conversation mode).");
       }
 
-      // Remove "Thinking..."
       conversationElem.removeChild(thinkingDiv);
 
-      // Insert the bot's reply
       const data = await response.json();
       const botMessage = data.bot_message || "No response available.";
       conversationElem.innerHTML += `<div class="bubble bot">${botMessage}</div>`;
       conversationElem.scrollTop = conversationElem.scrollHeight;
 
-      // The response includes the "team" distribution
+      // the team distribution from /chat
       const distribution = data.distribution || {};
       const finalStage = data.stage || "Uncertain";
       const feedback = data.feedback || "";
 
-      // Update the stage bars with the team's distribution
+      // show the team distribution by default
+      document.getElementById("stageHeader").textContent = "Stage Distribution (Team Stage)";
       updateStageUI(distribution, finalStage, feedback);
 
-      // Now we store the last / accum emotions from the response
+      // store last/accum emotions
       lastEmotionsData = data.last_emotion_dist || {};
       accumEmotionsData = data.accum_emotions || {};
 
-      // By default, let's show the last message emotions
+      // show last emotions by default
       showLastEmotions();
 
-    } catch (error) {
+    } catch(error){
       console.error("Error sending message:", error);
       alert(error.message);
-      if (conversationElem.contains(thinkingDiv)) {
+      if(conversationElem.contains(thinkingDiv)){
         conversationElem.removeChild(thinkingDiv);
       }
     }
