@@ -8,12 +8,34 @@ class StageMapper:
         Maps emotions to Tuckman stages. Also provides short feedback for any stage.
         """
         self.stage_emotion_map = {
-            "Forming": ["excitement", "anticipation", "anxiety", "curiosity", "eagerness"],
-            "Storming": ["frustration", "tension", "defensiveness", "conflict", "uncertainty"],
-            "Norming": ["relief", "trust", "acceptance", "cohesion", "camaraderie", "optimism"],
-            "Performing": ["confidence", "enthusiasm", "pride", "accomplishment", "satisfaction"],
-            "Adjourning": ["nostalgia", "closure", "sadness", "reflection"]
+            "Forming": [
+                "excitement", "anticipation", "curiosity", "interest", "hope",
+                "mild anxiety", "nervousness", "cautious optimism", "insecurity"
+            ],
+            "Storming": [
+                "anger", "frustration", "tension", "resentment", "hostility",
+                "disappointment", "fear of conflict", "defensiveness",
+                "uncertainty about direction", "discouragement", "rivalry",
+                "unfairness", "conflict"
+            ],
+            "Norming": [
+                "acceptance of roles", "feel of cohesion", "trust", "renewed hope",
+                "commitment", "calm", "serenity", "empathy", "camaraderie",
+                "relief from resolved conflict", "unity"
+            ],
+            "Performing": [
+                "confidence in team", "mutual respect", "enthusiasm about goals",
+                "flow", "synergy", "empowerment", "self-confidence", "pride in work",
+                "accomplishment", "joy in collaboration", "satisfaction with outcomes"
+            ],
+            "Adjourning": [
+                "sense of loss", "nostalgia for the group", "sadness about closure",
+                "relief from completion", "thankfulness for the experience",
+                "disorientation from change", "reflection on achievements",
+                "uncertainty about next steps", "enthusiasm for the future", "closure"
+            ]
         }
+
         self.llama_model = OllamaLLM(model="llama3.2")
 
     def get_stage_distribution(self, top5_emotions):

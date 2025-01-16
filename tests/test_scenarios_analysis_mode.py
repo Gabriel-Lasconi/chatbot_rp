@@ -54,10 +54,12 @@ class TestChatbotAnalysisMode(unittest.TestCase):
             "Bob: Great idea. I'm eager to see how we can coordinate effectively."
         ]
 
-        final_stage, feedback = self.chatbot.analyze_conversation_db(self.db, "TeamBeta", lines)
+        final_stage, feedback, accum_dist = self.chatbot.analyze_conversation_db(self.db, "TeamBeta", "Gabi", lines)
         print("\n[Forming Scenario Analysis - TeamBeta]")
         print(f"Final Stage: {final_stage}")
         print(f"Feedback: {feedback}")
+        print(f"Accumulative Distribution: {accum_dist }")
+
 
     def test_storming_scenario_analysis(self):
         """
@@ -74,10 +76,11 @@ class TestChatbotAnalysisMode(unittest.TestCase):
             "Gina: Exactly. The indefinite roles are causing unnecessary hostility."
         ]
 
-        final_stage, feedback = self.chatbot.analyze_conversation_db(self.db, "TeamGamma", lines)
-        print("\n[Storming Scenario Analysis - TeamGamma]")
+        final_stage, feedback, accum_dist = self.chatbot.analyze_conversation_db(self.db, "TeamGamma", "Gabi", lines)
+        print("\n[Stormin Scenario Analysis - TeamGamma]")
         print(f"Final Stage: {final_stage}")
         print(f"Feedback: {feedback}")
+        print(f"Accumulative Distribution: {accum_dist}")
 
     def test_norming_scenario_analysis(self):
         """
@@ -93,10 +96,11 @@ class TestChatbotAnalysisMode(unittest.TestCase):
             "Jack: Let's keep reinforcing our cohesion, so we progress smoothly."
         ]
 
-        final_stage, feedback = self.chatbot.analyze_conversation_db(self.db, "TeamDelta", lines)
+        final_stage, feedback, accum_dist = self.chatbot.analyze_conversation_db(self.db, "TeamDelta", "Gabi", lines)
         print("\n[Norming Scenario Analysis - TeamDelta]")
         print(f"Final Stage: {final_stage}")
         print(f"Feedback: {feedback}")
+        print(f"Accumulative Distribution: {accum_dist}")
 
     def test_performing_transition_analysis(self):
         """
@@ -111,10 +115,11 @@ class TestChatbotAnalysisMode(unittest.TestCase):
             "Nate: Good idea—pushing ourselves further is exciting!"
         ]
 
-        final_stage, feedback = self.chatbot.analyze_conversation_db(self.db, "TeamEpsilon", lines)
-        print("\n[Norming to Performing Transition Analysis - TeamEpsilon]")
+        final_stage, feedback, accum_dist = self.chatbot.analyze_conversation_db(self.db, "TeamEpsilon", "Gabi", lines)
+        print("\n[Performing Scenario Analysis - TeamEpsilon]")
         print(f"Final Stage: {final_stage}")
         print(f"Feedback: {feedback}")
+        print(f"Accumulative Distribution: {accum_dist}")
 
     def test_adjourning_scenario_analysis(self):
         """
@@ -130,7 +135,8 @@ class TestChatbotAnalysisMode(unittest.TestCase):
             "Sam: Yes, let's wrap up properly and celebrate the last steps."
         ]
 
-        final_stage, feedback = self.chatbot.analyze_conversation_db(self.db, "TeamZeta", lines)
+        final_stage, feedback, accum_dist = self.chatbot.analyze_conversation_db(self.db, "TeamZeta", "Gabi", lines)
         print("\n[Adjourning Scenario Analysis - TeamZeta]")
         print(f"Final Stage: {final_stage}")
         print(f"Feedback: {feedback}")
+        print(f"Accumulative Distribution: {accum_dist}")
