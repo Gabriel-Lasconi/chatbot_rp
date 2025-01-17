@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.db import init_db, SessionLocal, Team, Member
+from app.db import init_db, SessionLocal, Team, Member, Message
 from app.chatbot_generative import ChatbotGenerative
 
 app = FastAPI()
@@ -61,7 +61,7 @@ def root_page():
 def get_team_info(team_name: str = Query(...), db: Session = Depends(get_db)):
     team = db.query(Team).filter(Team.name == team_name).first()
     if not team:
-        team = Team(name=team_name, current_stage="Uncertain")
+        team = Team(name=team_name, current_stage="Uncertain", feedback="")
         db.add(team)
         db.commit()
         db.refresh(team)
@@ -69,10 +69,7 @@ def get_team_info(team_name: str = Query(...), db: Session = Depends(get_db)):
 
     distribution = team.load_team_distribution()
     final_stage = team.current_stage
-
-    feedback = ""
-    if final_stage and final_stage != "Uncertain":
-        feedback = chatbot.stage_mapper.get_feedback_for_stage(final_stage)
+    feedback = team.feedback if team.feedback else ""
 
     return {
         "distribution": distribution,
@@ -97,31 +94,33 @@ def get_member_info(team_name: str = Query(...), member_name: str = Query(...), 
     personal_dist = member.load_accum_distrib()
     personal_stage = member.current_stage
     personal_emotions = member.load_accum_emotions()
+    personal_feedback = member.personal_feedback if member.personal_feedback else ""
 
     return {
         "distribution": personal_dist,
         "final_stage": personal_stage,
-        "accum_emotions": personal_emotions
+        "accum_emotions": personal_emotions,
+        "personal_feedback": personal_feedback
     }
+
 
 @app.post("/chat")
 def chat_with_bot(req: ChatRequest, db: Session = Depends(get_db)):
-    # We now expect 7 items from process_line
-    (bot_msg, final_stage, feedback,
-     accum_dist, last_emotion_dist,
-     accum_emotions, personal_feedback) = chatbot.process_line(
-         db, req.team_name, req.member_name, req.text
+    bot_msg, final_stage, feedback, accum_dist, last_emotion_dist, accum_emotions, personal_feedback = chatbot.process_line(
+        db, req.team_name, req.member_name, req.text
     )
 
     the_team = db.query(Team).filter(Team.name == req.team_name).first()
     team_distribution = the_team.load_team_distribution()
+    team_feedback = the_team.feedback
 
     return {
         "bot_message": bot_msg,
         "stage": final_stage if final_stage else "Uncertain",
-        "feedback": feedback if feedback else "",
+        "feedback": feedback if feedback else "No feedback available.",
         "distribution": team_distribution,
-        "my_stage_feedback": personal_feedback if personal_feedback else "",
+        "team_feedback": team_feedback if team_feedback else "No team feedback available.",
+        "my_stage_feedback": personal_feedback if personal_feedback else "No personal feedback available.",
         "last_emotion_dist": last_emotion_dist,
         "accum_emotions": accum_emotions
     }
@@ -133,11 +132,13 @@ def analyze_conversation(req: AnalyzeRequest, db: Session = Depends(get_db)):
     )
     the_team = db.query(Team).filter(Team.name == req.team_name).first()
     team_distribution = the_team.load_team_distribution()
+    team_feedback = the_team.feedback if the_team.feedback else ""
 
     return {
         "final_stage": final_stage if final_stage else "Uncertain",
         "feedback": feedback if feedback else "",
-        "distribution": team_distribution
+        "distribution": team_distribution,
+        "team_feedback": team_feedback
     }
 
 @app.post("/analyze-file")
@@ -165,8 +166,22 @@ async def analyze_file(
 
 @app.post("/reset")
 def reset_team(req: ChatRequest, db: Session = Depends(get_db)):
-    chatbot.reset_team(db, req.team_name)
+    team = db.query(Team).filter(Team.name == req.team_name).first()
+    if team:
+        team.current_stage = "Uncertain"
+        team.feedback = ""  # Clear team feedback
+        for member in team.members:
+            member.current_stage = "Uncertain"
+            member.save_accum_distrib({})
+            member.num_lines = 0
+            member.save_accum_emotions({})
+            member.personal_feedback = ""  # Clear personal feedback
+            db.query(Message).filter(Message.member_id == member.id).delete()
+            db.commit()
+        db.commit()
+
     return {"message": f"Team '{req.team_name}' has been reset."}
+
 
 if __name__ == "__main__":
     import uvicorn

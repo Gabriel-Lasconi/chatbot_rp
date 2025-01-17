@@ -211,6 +211,17 @@
       margin: 0;
     }
 
+    #feedbackText {
+      max-height: 100px;
+      overflow-y: auto;
+      background: #fff;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 1.4;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
     #stageBars {
       padding: 20px;
       display: flex;
@@ -245,6 +256,7 @@
       background: #4a90e2;
       transition: width 0.5s ease;
     }
+
 
     .stagePercentage {
       font-size: 14px;
@@ -357,11 +369,10 @@
       </div>
 
       <div id="finalStageInfo">
-        <h3>
-          Current Stage:
-          <span id="finalStageSpan">Uncertain</span>
-        </h3>
+        <h3>Current Stage: <span id="finalStageSpan">Uncertain</span></h3>
+        <div id="feedbackText" class="scrollable">
         <p id="stageFeedback">No data available.</p>
+        </div>
       </div>
 
       <div id="stageBars"></div>

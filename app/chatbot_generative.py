@@ -147,15 +147,17 @@ class ChatbotGenerative:
         # Load existing data
         accum_dist = member.load_accum_distrib()       # Tuckman distribution
         accum_emotions = member.load_accum_emotions()  # overall emotion distribution
+        # Load current data from the database
+        final_stage = team.load_current_stage()
+        team_feedback = team.load_feedback()
+        personal_feedback = member.load_personal_feedback()
         if not accum_dist:
             accum_dist = {stg: 0.0 for stg in self._stage_mapper.stage_emotion_map.keys()}
         if not accum_emotions:
             accum_emotions = {}
 
-        final_stage = None
-        feedback = None
+
         last_emotion_dist = {}
-        personal_feedback = ""  # New variable so we have 7 items
 
         # Check message
         is_valuable = self._classify_message_relevance(text)
@@ -213,17 +215,24 @@ class ChatbotGenerative:
                     member.current_stage = best_stage
                     db.commit()
                     if self.lines_since_final_stage[key_for_ephemeral] >= 3:
+                        # Generate personal feedback
+                        personal_feedback = self.stage_mapper.get_personal_feedback(db, member.id, best_stage)
+                        member.personal_feedback = personal_feedback
+                        db.commit()
+
+                        # Generate team feedback
+                        team_feedback = self.stage_mapper.get_team_feedback(db, team.id, best_stage)
+                        team.feedback = team_feedback
+                        db.commit()
+
                         final_stage = best_stage
-                        feedback = self._stage_mapper.get_feedback_for_stage(best_stage)
-                        # You can produce personal feedback if you wish:
-                        personal_feedback = f"(Personal) Stage is {best_stage}, reason: your top emotions match this stage."
                         self.lines_since_final_stage[key_for_ephemeral] = 0
 
         # Recompute the entire team's stage
         self._compute_team_stage(db, team)
 
-        # Build conversation string for prompt
-        all_msgs = db.query(Message).join(Member).filter(Member.team_id == team.id).all()
+        # Build conversation string for prompt, loading every message this member had (only the messages of this member, not taking into account his team members)
+        all_msgs = db.query(Message).join(Member).filter(Member.id == member.id).all()
         all_msgs.sort(key=lambda x: x.id)
 
         lines_for_prompt = []
@@ -250,7 +259,7 @@ class ChatbotGenerative:
         return (
             bot_response,
             final_stage,
-            feedback,
+            team_feedback,
             accum_dist,
             last_emotion_dist,
             accum_emotions,

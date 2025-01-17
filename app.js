@@ -133,7 +133,7 @@ const App = (function() {
       const data = await resp.json();
       // data => { distribution, final_stage, accum_emotions? }
 
-      updateStageUI(data.distribution, data.final_stage, "");
+      updateStageUI(data.distribution, data.final_stage, data.personal_feedback);
     } catch(err){
       alert(err.message);
     }
@@ -146,13 +146,13 @@ const App = (function() {
 
     let entries = Object.entries(emotions);
     entries.sort((a,b)=> b[1]-a[1]);
-    const top10 = entries.slice(0,10);
+    const top5 = entries.slice(0,5);
 
-    if(top10.length===0){
+    if(top5.length===0){
       emotionBarsElem.innerHTML = "<p style='font-size:14px;color:#777;'>No emotions detected.</p>";
       return;
     }
-    for(const [emo, val] of top10){
+    for(const [emo, val] of top5){
       const pct=(val*100).toFixed(2);
       emotionBarsElem.innerHTML += createStageBarHTML(emo, pct, pct);
     }
@@ -222,88 +222,85 @@ const App = (function() {
   }
 
   // SEND A MESSAGE => calls /chat
-  async function sendMessage(){
+async function sendMessage() {
     const teamName = document.getElementById("teamName").value.trim();
     const memberName = document.getElementById("memberName").value.trim();
     const userMsg = document.getElementById("userInput").value.trim();
     const conversationElem = document.getElementById("conversation");
 
-    if(!teamName){
-      alert("Please enter a team name!");
-      return;
+    if (!teamName) {
+        alert("Please enter a team name!");
+        return;
     }
-    if(!memberName){
-      alert("Please enter your (member) name!");
-      return;
+    if (!memberName) {
+        alert("Please enter your (member) name!");
+        return;
     }
-    if(!userMsg){
-      alert("Please enter a message!");
-      return;
+    if (!userMsg) {
+        alert("Please enter a message!");
+        return;
     }
 
-    document.getElementById("userInput").value="";
+    document.getElementById("userInput").value = "";
 
-    // user bubble
+    // Display user bubble
     conversationElem.innerHTML += `<div class="bubble user">${userMsg}</div>`;
     conversationElem.scrollTop = conversationElem.scrollHeight;
 
-    // thinking
+    // Display loading indicator
     const thinkingDiv = document.createElement("div");
-    thinkingDiv.classList.add("bubble","bot");
-    thinkingDiv.innerHTML=`
-      <span class="spinner"></span>
-      <span style="margin-left:5px;">Thinking...</span>
+    thinkingDiv.classList.add("bubble", "bot");
+    thinkingDiv.innerHTML = `
+        <span class="spinner"></span>
+        <span style="margin-left:5px;">Thinking...</span>
     `;
     conversationElem.appendChild(thinkingDiv);
     conversationElem.scrollTop = conversationElem.scrollHeight;
 
     const payload = {
-      text: userMsg,
-      team_name: teamName,
-      member_name: memberName
+        text: userMsg,
+        team_name: teamName,
+        member_name: memberName,
     };
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/chat", {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify(payload)
-      });
-      if(!response.ok){
-        throw new Error("Failed to connect to the chatbot (conversation mode).");
-      }
+        const response = await fetch("http://127.0.0.1:8000/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+            throw new Error("Failed to connect to the chatbot (conversation mode).");
+        }
 
-      conversationElem.removeChild(thinkingDiv);
-
-      const data = await response.json();
-      const botMessage = data.bot_message || "No response available.";
-      conversationElem.innerHTML += `<div class="bubble bot">${botMessage}</div>`;
-      conversationElem.scrollTop = conversationElem.scrollHeight;
-
-      // the team distribution from /chat
-      const distribution = data.distribution || {};
-      const finalStage = data.stage || "Uncertain";
-      const feedback = data.feedback || "";
-
-      // show the team distribution by default
-      document.getElementById("stageHeader").textContent = "Stage Distribution (Team Stage)";
-      updateStageUI(distribution, finalStage, feedback);
-
-      // store last/accum emotions
-      lastEmotionsData = data.last_emotion_dist || {};
-      accumEmotionsData = data.accum_emotions || {};
-
-      // show last emotions by default
-      showLastEmotions();
-
-    } catch(error){
-      console.error("Error sending message:", error);
-      alert(error.message);
-      if(conversationElem.contains(thinkingDiv)){
+        const data = await response.json();
+        console.log(data)
+        const botMessage = data.bot_message || "No response available.";
         conversationElem.removeChild(thinkingDiv);
-      }
+
+        // Display bot bubble
+        conversationElem.innerHTML += `<div class="bubble bot">${botMessage}</div>`;
+        conversationElem.scrollTop = conversationElem.scrollHeight;
+
+        // Update stage distribution
+        const distribution = data.distribution || {};
+        const finalStage = data.stage || "Uncertain";
+        const feedback = data.team_feedback || "";
+        document.getElementById("stageHeader").textContent = "Stage Distribution (Team Stage)";
+        updateStageUI(distribution, finalStage, feedback);
+
+        // Store and display emotions
+        lastEmotionsData = data.last_emotion_dist || {};
+        accumEmotionsData = data.accum_emotions || {};
+        showLastEmotions();
+    } catch (error) {
+        console.error("Error sending message:", error);
+        alert(error.message);
+        if (conversationElem.contains(thinkingDiv)) {
+            conversationElem.removeChild(thinkingDiv);
+        }
     }
-  }
+}
 
 /********************************************************
   ANALYSIS MODE

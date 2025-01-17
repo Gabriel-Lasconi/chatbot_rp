@@ -1,6 +1,10 @@
 # stage_mapping.py
 
 from langchain_ollama import OllamaLLM
+from sqlalchemy.orm import Session
+
+from app.db import Message, Team, Member
+
 
 class StageMapper:
     def __init__(self):
@@ -92,20 +96,98 @@ class StageMapper:
                 return stage
         return None
 
-    def get_feedback_for_stage(self, stage: str):
+    def get_team_feedback(self, db: Session, team_id: int, stage: str) -> str:
         """
-        (Unchanged) Generate short feedback for a specific stage using LLaMA.
+        Generate team-level feedback by analyzing messages from all members of a team.
         """
-        if stage not in self.stage_emotion_map:
-            return "No feedback available for this stage."
+        team = db.query(Team).filter(Team.id == team_id).first()
+        if not team:
+            return "Team not found."
 
-        prompt = (
-            f"You are a helpful assistant. Give a SHORT 2-sentence advice for a team in '{stage}' stage. "
-            "Use simple language. Avoid bullet points."
+        # Fetch messages for all members
+        messages = (
+            db.query(Message)
+            .join(Member)
+            .filter(Member.team_id == team_id)
+            .order_by(Message.id)
+            .all()
         )
+
+        # Build conversation string
+        conversation_str = ""
+        for msg in messages:
+            role = msg.role.capitalize()
+            conversation_str += f"{role}: {msg.text}\n"
+
+        # Construct prompt
+        prompt = f"""<<SYS>>
+        You are an assistant that analyzes team-wide conversations and provides structured feedback.
+        Based on the full team conversation below, provide the following:
+
+        FEEDBACK:
+        1. A SUMMARY OF THE TEAM'S PROBLEMS
+        2. A SHORT EXPLANATION WHY THIS DIAGNOSTIC (Tuckman stage: {stage}) FITS BEST
+        3. POSITIVE AND CONSTRUCTIVE FEEDBACK FOR THE TEAM
+
+        <</SYS>>
+
+        Team conversation:
+        {conversation_str}
+
+        Based on this, the team's current stage is: {stage}.
+        Provide feedback in the requested format. Avoid text in bold, bullet points or writing the feedback in an ordered list. Write it in paragraphs.
+        """
+
+        # Invoke LLaMA
         try:
-            response = self.llama_model.invoke(input=prompt)
-            return response.strip()
+            response = self.llama_model.invoke(input=prompt).strip()
+            return response
         except Exception as e:
-            print(f"[ERROR stage_mapping] {e}")
-            return "An error occurred while generating feedback."
+            print(f"[ERROR in get_team_feedback] {e}")
+            return "An error occurred while generating team feedback."
+
+    def get_personal_feedback(self, db: Session, member_id: int, stage: str) -> str:
+        """
+        Generate personal feedback for a specific team member by analyzing their messages.
+        """
+        # Retrieve messages for this member
+        messages = (
+            db.query(Message)
+            .filter(Message.member_id == member_id)
+            .order_by(Message.id)
+            .all()
+        )
+
+        # Build conversation string
+        conversation_str = ""
+        for msg in messages:
+            role = msg.role.capitalize()
+            conversation_str += f"{role}: {msg.text}\n"
+
+        # Construct prompt
+        prompt = f"""<<SYS>>
+        You are an assistant that analyzes a user's personal conversation and provides structured feedback.
+        Based on the full personal conversation below, provide the following:
+
+        FEEDBACK:
+        1. A SUMMARY OF THE USER'S PROBLEMS
+        2. A SHORT EXPLANATION WHY THIS DIAGNOSTIC (Tuckman stage: {stage}) FITS BEST
+        3. POSITIVE AND CONSTRUCTIVE FEEDBACK FOR THE USER
+
+        <</SYS>>
+
+        User conversation:
+        {conversation_str}
+
+        Based on this, the user's current stage is: {stage}.
+        Provide feedback in the requested format. Avoid text in bold, bullet points or writing the feedback in an ordered list. Write it in paragraphs.
+        """
+
+        # Invoke LLaMA
+        try:
+            response = self.llama_model.invoke(input=prompt).strip()
+            return response
+        except Exception as e:
+            print(f"[ERROR in get_personal_feedback] {e}")
+            return "An error occurred while generating personal feedback."
+

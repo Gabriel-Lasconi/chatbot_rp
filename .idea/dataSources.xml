@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
-    <data-source source="LOCAL" name="teams" uuid="116efb51-4aca-4237-881b-77bd16c7db72">
+    <data-source source="LOCAL" name="teams_extended" uuid="f7220a23-1528-4dbd-8ee1-ee6d52b67d56">
       <driver-ref>sqlite.xerial</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
-      <jdbc-url>jdbc:sqlite:C:\Users\Lasco\PycharmProjects\team_chatbot\app\teams.db</jdbc-url>
+      <jdbc-url>jdbc:sqlite:C:\Users\Lasco\PycharmProjects\team_chatbot\app\teams_extended.db</jdbc-url>
       <working-dir>$ProjectFileDir$</working-dir>
       <libraries>
         <library>
@@ -16,11 +16,11 @@
         </library>
       </libraries>
     </data-source>
-    <data-source source="LOCAL" name="teams_extended" uuid="f7220a23-1528-4dbd-8ee1-ee6d52b67d56">
+    <data-source source="LOCAL" name="teams" uuid="045466c3-10f9-4672-84f1-ff181b8e58e1">
       <driver-ref>sqlite.xerial</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
-      <jdbc-url>jdbc:sqlite:C:\Users\Lasco\PycharmProjects\team_chatbot\app\teams_extended.db</jdbc-url>
+      <jdbc-url>jdbc:sqlite:C:\Users\Lasco\PycharmProjects\team_chatbot\app\teams.db</jdbc-url>
       <working-dir>$ProjectFileDir$</working-dir>
       <libraries>
         <library>
