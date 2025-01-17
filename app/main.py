@@ -128,7 +128,7 @@ def chat_with_bot(req: ChatRequest, db: Session = Depends(get_db)):
 @app.post("/analyze")
 def analyze_conversation(req: AnalyzeRequest, db: Session = Depends(get_db)):
     final_stage, feedback, _ = chatbot.analyze_conversation_db(
-        db, req.team_name, req.member_name, req.lines
+        db, req.team_name, req.lines
     )
     the_team = db.query(Team).filter(Team.name == req.team_name).first()
     team_distribution = the_team.load_team_distribution()
@@ -144,7 +144,6 @@ def analyze_conversation(req: AnalyzeRequest, db: Session = Depends(get_db)):
 @app.post("/analyze-file")
 async def analyze_file(
     team_name: str,
-    member_name: str,
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
@@ -155,7 +154,7 @@ async def analyze_file(
     lines = file_contents.splitlines()
 
     final_stage, feedback, distribution = chatbot.analyze_conversation_db(
-        db, team_name, member_name, lines
+        db, team_name, lines
     )
 
     return {

@@ -1,3 +1,5 @@
+import re
+
 from langchain_ollama import OllamaLLM
 from app.emotion_analysis import EmotionDetector
 from app.stage_mapping import StageMapper
@@ -48,6 +50,51 @@ class ChatbotGenerative:
             db.commit()
             db.refresh(member)
         return member
+
+    def _extract_members_and_messages(self, chat_log: str):
+        """
+        Extracts members and messages from the provided chat log.
+        Chat log format: [timestamp] Name: message
+        """
+        member_message_map = {}
+        pattern = re.compile(r"\[(.*?)\] (.*?): (.*)")
+
+        for line in chat_log.splitlines():
+            match = pattern.match(line)
+            if match:
+                _, name, message = match.groups()
+                if name not in member_message_map:
+                    member_message_map[name] = []
+                member_message_map[name].append(message)
+
+        return member_message_map
+
+    def _process_chat_log(self, db, team_name: str, chat_log):
+        """
+        Processes the entire chat log:
+        - Ensures the team exists (creates one if necessary).
+        - Extracts members and messages from the chat log.
+        - Adds them to the database.
+        """
+        team = self._load_team(db, team_name)
+
+        # Ensure chat_log is a string
+        if isinstance(chat_log, list):
+            chat_log = "\n".join(chat_log)
+
+        # Parse the chat log to extract members and their messages
+        member_message_map = self._extract_members_and_messages(chat_log)
+
+        # Add members and messages to the database
+        for member_name, messages in member_message_map.items():
+            member = self._load_member(db, team, member_name)
+
+            for message in messages:
+                user_msg = Message(member_id=member.id, role="User", text=message)
+                db.add(user_msg)
+            db.commit()
+
+        return member_message_map.keys()
 
     def _build_prompt(self, conversation_str: str, user_message: str) -> str:
         prompt = (
@@ -266,19 +313,40 @@ class ChatbotGenerative:
             personal_feedback
         )
 
-    def analyze_conversation_db(self, db, team_name: str, member_name: str, lines: list):
+    def analyze_conversation_db(self, db, team_name: str, chat_log: str):
+        """
+        Processes and analyzes a conversation from a chat log.
+        - Extracts members and messages.
+        - Updates stages and emotions for each member.
+        - Returns the overall team stage, feedback, and team distribution.
+        """
+        members = self._process_chat_log(db, team_name, chat_log)
         final_stage = None
         feedback = None
-        accum_dist = {}
-        for line in lines:
-            # ignoring last 1 returns (the last is personal_feedback)
-            bot_msg, concluded_stage, concluded_feedback, accum_dist, _, _, _ = self.process_line(
-                db, team_name, member_name, line
-            )
-            if concluded_stage:
-                final_stage = concluded_stage
-                feedback = concluded_feedback
-        return final_stage, feedback, accum_dist
+        distribution = {}
+
+        for member_name in members:
+            # Retrieve or create team and member
+            team = self._load_team(db, team_name)
+            member = self._load_member(db, team, member_name)
+
+            # Retrieve all messages for this member
+            messages = db.query(Message).filter(Message.member_id == member.id).all()
+            for message in messages:
+                _, concluded_stage, concluded_feedback, _, _, _, _ = self.process_line(
+                    db, team_name, member_name, message.text
+                )
+                # Update final_stage and feedback if found
+                if concluded_stage:
+                    final_stage = concluded_stage
+                    feedback = concluded_feedback
+
+        # Calculate team distribution after processing all members
+        team = self._load_team(db, team_name)
+        distribution = team.load_team_distribution()
+
+        # Return the final stage, feedback, and distribution
+        return final_stage, feedback, distribution
 
     def reset_team(self, db, team_name: str):
         team = db.query(Team).filter(Team.name == team_name).first()
@@ -299,3 +367,4 @@ class ChatbotGenerative:
                 keys_to_delete.append((t_name, m_name))
         for k in keys_to_delete:
             del self.lines_since_final_stage[k]
+

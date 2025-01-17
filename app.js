@@ -378,8 +378,6 @@ async function sendMessage() {
     }
 }
 
-
-
     function openFeedbackPopup() {
     const feedbackText = document.getElementById("stageFeedback").textContent.trim();
     const popupText = document.getElementById("popupFeedbackText");
@@ -478,28 +476,41 @@ async function analyzeConversation() {
 /********************************************************
   FILE UPLOAD HANDLING
 ********************************************************/
-function processFileUpload() {
-  const fileInput = document.getElementById("fileUpload");
-  const analysisInput = document.getElementById("analysisInput");
+async function processFileUpload() {
+    const fileInput = document.getElementById("fileUpload");
+    const teamName = document.getElementById("teamName").value.trim();
 
-  if (fileInput.files.length === 0) {
-    alert("No file selected. Please upload a valid text file.");
-    return;
-  }
+    if (!teamName) {
+        alert("Please enter a team name!");
+        return;
+    }
 
-  const file = fileInput.files[0];
-  const reader = new FileReader();
+    if (fileInput.files.length === 0) {
+        alert("Please upload a file!");
+        return;
+    }
 
-  reader.onload = function (event) {
-    const fileContents = event.target.result;
-    analysisInput.value = fileContents;
-  };
+    const file = fileInput.files[0];
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("team_name", teamName);
 
-  reader.onerror = function () {
-    alert("Failed to read the file. Please try again.");
-  };
+    try {
+        const response = await fetch("http://127.0.0.1:8000/upload_chatlog", {
+            method: "POST",
+            body: formData,
+        });
 
-  reader.readAsText(file);
+        if (!response.ok) {
+            throw new Error("Failed to process the chat log file.");
+        }
+
+        const result = await response.json();
+        alert("Chat log successfully analyzed and saved!");
+    } catch (error) {
+        console.error("Error processing chat log:", error);
+        alert(error.message);
+    }
 }
 
 async function uploadFileForAnalysis() {
