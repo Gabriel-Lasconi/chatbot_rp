@@ -221,7 +221,35 @@
       line-height: 1.4;
       box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
     }
+    #feedbackPopup {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    }
 
+    #popupContent {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        width: 50%;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        text-align: center;
+    }
+
+    #popupFeedbackText {
+        margin: 20px 0;
+        font-size: 16px;
+        color: #333;
+        max-height: 300px;
+        overflow-y: auto;
+    }
     #stageBars {
       padding: 20px;
       display: flex;
@@ -284,14 +312,11 @@
       flex-direction: column;
       gap: 10px;
     }
-
-    /* The toggle container for last vs. accumulative emotions */
     #emotionsToggle {
       display: flex;
       gap: 10px;
       margin-bottom: 10px;
     }
-
     .spinner {
       border: 4px solid #f3f3f3;
       border-top: 4px solid #4a90e2;
@@ -303,6 +328,47 @@
       vertical-align: middle;
       margin-right: 10px;
     }
+    .toggle-buttons {
+      display: flex;
+      border: 1px solid #dce1ed;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #ffffff;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .toggle-btn {
+      flex: 1;
+      padding: 12px 18px;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      background: transparent;
+      color: #555;
+      transition: all 0.3s ease;
+      outline: none;
+    }
+
+    .toggle-btn:last-child {
+      border-right: none;
+    }
+    .toggle-btn:hover {
+      background: #f4f6fb;
+      color: #4a90e2;
+    }
+    .toggle-btn.active {
+      font-weight: 600;
+      color: #ffffff;
+      background: #4a90e2;
+      border: none;
+      box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.2);
+      border-radius: 12px; /* changed the radius to fit the other radius*/
+      transition: background-color 0.3s ease;
+    }
+    .toggle-btn.active:hover {
+      background: #357ab8;
+    }
 
     @keyframes spin {
       0% {
@@ -312,6 +378,7 @@
         transform: rotate(360deg);
       }
     }
+
   </style>
 </head>
 <body>
@@ -363,25 +430,38 @@
     <div id="stageColumn">
       <div id="stageHeader">Stage Distribution (Team Stage)</div>
 
-      <div style="display: flex; gap:10px; padding: 10px; justify-content:center;">
-        <button class="mode-btn" onclick="App.showTeamStageDistribution()">Team Stage</button>
-        <button class="mode-btn" onclick="App.showMyStageDistribution()">My Stage</button>
+      <div id="stageToggle" class="toggle-buttons">
+        <button class="toggle-btn active" onclick="App.showTeamStageDistribution(event)">Team Stage</button>
+        <button class="toggle-btn" onclick="App.showMyStageDistribution(event)">My Stage</button>
       </div>
 
-      <div id="finalStageInfo">
+          <div id="finalStageInfo">
         <h3>Current Stage: <span id="finalStageSpan">Uncertain</span></h3>
-        <div id="feedbackText" class="scrollable">
-        <p id="stageFeedback">No data available.</p>
+            <button id="openFeedbackBtn" class="mode-btn" onclick="App.openFeedbackPopup()">Open Feedback</button>
+        <div id="feedbackTextContainer">
+            <div id="feedbackText" class="scrollable">
+                <p id="stageFeedback">No data available.</p>
+            </div>
         </div>
+    </div>
+
+      <div id="feedbackPopup" class="hidden">
+    <div id="popupContent">
+        <h3>Feedback</h3>
+        <div id="popupFeedbackText"></div>
+        <button class="mode-btn" onclick="App.closeFeedbackPopup()">Close</button>
+    </div>
       </div>
+
+
 
       <div id="stageBars"></div>
 
       <!-- Additional panel for emotions -->
       <div id="lastEmotionsInfo">
-        <div id="emotionsToggle">
-          <button class="mode-btn" onclick="App.showLastEmotions()">Last Message</button>
-          <button class="mode-btn" onclick="App.showAccumEmotions()">Accumulative</button>
+        <div id="emotionsToggle" class="toggle-buttons">
+          <button id="lastMessageBtn" class="toggle-btn active" onclick="App.showLastEmotions()">Last Message</button>
+          <button id="accumEmotionsBtn" class="toggle-btn" onclick="App.showAccumEmotions()">Accumulative</button>
         </div>
         <h3 id="emotionsTitle">Emotions (Last Message)</h3>
         <div id="emotionBars"></div>
