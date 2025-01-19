@@ -2,7 +2,7 @@ A chatbot developed as part of a Bachelor research project at the University of 
 
 ## Features
 
-**Emotion Detection**: Utilizes a zero-shot classification model to identify emotional cues in user text.
+**Emotion Detection**: Utilizes a zero-shot classification model to identify emotional cues in user text. 
 **Stage Mapping**: Associates detected emotions with corresponding stages in Tuckman’s team development model.
 **Feedback Generation**: Provides stage-specific recommendations to enhance team dynamics and performance.
 **Conversation & Analysis Modes**: Allows for real-time conversation tracking or bulk analysis of team communications.
