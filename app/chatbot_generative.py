@@ -51,6 +51,43 @@ class ChatbotGenerative:
             db.refresh(member)
         return member
 
+    def _extract_unique_members_via_llama(self, chat_log: str):
+        """
+        Uses the LLama model to extract a list of unique team member names from the chat log.
+        Ensures that only active participants (who have sent messages) are included.
+        """
+        prompt = (
+            "Extract a list of unique team member names who have sent messages in the following chat log. "
+            "Only include the names of people who have actively participated in the conversation, not names mentioned in the messages.\n\n"
+            f"Chat Log:\n{chat_log}\n\n"
+            "List of team members:"
+        )
+
+        response = self.model.invoke(input=prompt).strip()
+
+        # Assume the response is a comma-separated list of names
+        # e.g., "Sarp Onkahraman, Archie Ιμαμίδης, Max 🔨"
+        members = [name.strip() for name in response.split(",") if name.strip()]
+
+        # Normalize member names to prevent duplicates
+        normalized_members = self._normalize_member_names(members)
+
+        return normalized_members
+
+    def _normalize_member_names(self, members):
+        """
+        Normalizes member names by removing emojis and trimming whitespace.
+        This helps in preventing duplicates caused by formatting differences.
+        """
+        normalized = []
+        for name in members:
+            # Remove emojis and non-alphanumeric characters
+            name_clean = re.sub(r'[^\w\s]', '', name)
+            name_clean = name_clean.strip()
+            if name_clean and name_clean not in normalized:
+                normalized.append(name_clean)
+        return normalized
+
     def _extract_members_and_messages(self, chat_log: str):
         """
         Extracts members and messages from the provided chat log.
@@ -59,10 +96,14 @@ class ChatbotGenerative:
         2. Name: message
         """
         member_message_map = {}
+
+        # Clean the chat log to remove problematic characters
+        cleaned_chat_log = re.sub(r"[\u200e]", "", chat_log)
+
         # Regular expression to match both formats
         pattern = re.compile(r"(?:\[(.*?)\] )?(.*?): (.*)")
 
-        for line in chat_log.splitlines():
+        for line in cleaned_chat_log.splitlines():
             match = pattern.match(line)
             if match:
                 _, name, message = match.groups()
@@ -131,7 +172,7 @@ class ChatbotGenerative:
 
     def _compute_team_stage(self, db, team):
         """
-        After we update each member's accum_distrib,
+        After updating each member's accum_distrib,
         compute the 'combined' distribution for the entire team,
         then pick whichever stage has the highest value in that distribution
         as the final team stage.
@@ -149,7 +190,7 @@ class ChatbotGenerative:
                     if stg in combined:
                         combined[stg] += val
 
-        # If no members have a distribution, we do combined={}
+        # If no members have a distribution, set combined to empty
         if num_members > 0:
             for stg in combined:
                 combined[stg] /= num_members
@@ -160,7 +201,7 @@ class ChatbotGenerative:
         team.save_team_distribution(combined)
         db.commit()
 
-        # If combined is empty, set team.current_stage=Uncertain
+        # If combined is empty, set team.current_stage to "Uncertain"
         if not combined or all(v == 0.0 for v in combined.values()):
             team.current_stage = "Uncertain"
             db.commit()
@@ -177,14 +218,22 @@ class ChatbotGenerative:
         team.current_stage = best_stage
         db.commit()
 
-    def process_line(self, db, team_name: str, member_name: str, text: str):
+    def process_line(self, db, team_name: str, member_name: str, text: str, mode: str = "conversation"):
         """
-        1) Insert user message
-        2) If "Valuable", detect top-5, accumulate *all* user emotions in accum_emotions
-        3) Then derive Tuckman distribution from the entire accum_emotions
-        4) Possibly finalize stage
-        5) Recompute team's stage
-        6) Return everything (7 items, including personal_feedback)
+        Processes a single line of conversation, either in conversation or analysis mode.
+
+        Parameters:
+        - db: Database session.
+        - team_name: Name of the team.
+        - member_name: Name of the member.
+        - text: The message text.
+        - mode: 'conversation' or 'analysis'. Determines whether to generate assistant responses.
+
+        Returns:
+        - If mode is 'conversation':
+            (bot_response, final_stage, team_feedback, accum_dist, last_emotion_dist, accum_emotions, personal_feedback)
+        - If mode is 'analysis':
+            (None, final_stage, team_feedback, accum_dist, last_emotion_dist, accum_emotions, personal_feedback)
         """
         team = self._load_team(db, team_name)
         member = self._load_member(db, team, member_name)
@@ -207,30 +256,29 @@ class ChatbotGenerative:
         if not accum_emotions:
             accum_emotions = {}
 
-
         last_emotion_dist = {}
 
-        # Check message
+        # Check message relevance
         is_valuable = self._classify_message_relevance(text)
         if is_valuable:
-            # 1) detect top-5 emotions for this message
+            # Detect top-5 emotions for this message
             emotion_results = self.emotion_detector.detect_emotion(text, top_n=5)
             top5_emotions = emotion_results["top_emotions"]
 
-            # store top-5 in the message row
+            # Store top-5 in the message row
             dist_for_message = {emo["label"]: emo["score"] for emo in top5_emotions}
             user_msg.save_top_emotion_distribution(dist_for_message)
             db.commit()
 
             last_emotion_dist = dist_for_message
 
-            # 2) update accum_emotions (the entire user's total emotional distribution)
+            # Update accum_emotions (the entire user's total emotional distribution)
             for e_dict in top5_emotions:
                 lbl = e_dict["label"]
                 conf = e_dict["score"]
                 accum_emotions[lbl] = accum_emotions.get(lbl, 0.0) + conf
 
-            # re-normalize accum_emotions
+            # Re-normalize accum_emotions
             sum_emotions = sum(accum_emotions.values())
             if sum_emotions > 0.0:
                 for e_lbl in accum_emotions:
@@ -239,23 +287,23 @@ class ChatbotGenerative:
             member.save_accum_emotions(accum_emotions)
             db.commit()
 
-            # 3) Re-derive the Tuckman distribution from the entire accum_emotions
+            # Re-derive the Tuckman distribution from the entire accum_emotions
             entire_dist = self.stage_mapper.get_stage_distribution_from_entire_emotions(accum_emotions)
             member.save_accum_distrib(entire_dist)
 
-            # (Optional) finalize the stage if user has enough lines
+            # (Optional) Finalize the stage if user has enough lines
             member.num_lines += 1
             db.commit()
 
-            # ephemeral lines track
+            # Ephemeral lines track
             key_for_ephemeral = (team_name, member_name)
             if key_for_ephemeral not in self.lines_since_final_stage:
                 self.lines_since_final_stage[key_for_ephemeral] = 0
             self.lines_since_final_stage[key_for_ephemeral] += 1
 
-            # if user has >=3 lines, possibly finalize the stage
+            # If user has >=3 lines, possibly finalize the stage
             if member.num_lines >= 3:
-                # find the highest stage in entire_dist
+                # Find the highest stage in entire_dist
                 best_sum = 0.0
                 best_stage = None
                 for s, v in entire_dist.items():
@@ -282,40 +330,52 @@ class ChatbotGenerative:
         # Recompute the entire team's stage
         self._compute_team_stage(db, team)
 
-        # Build conversation string for prompt, loading every message this member had (only the messages of this member, not taking into account his team members)
-        all_msgs = db.query(Message).join(Member).filter(Member.id == member.id).all()
-        all_msgs.sort(key=lambda x: x.id)
+        if mode == "conversation":
+            # Build conversation string for prompt, loading every message this member had (only the messages of this member, not taking into account his team members)
+            all_msgs = db.query(Message).join(Member).filter(Member.id == member.id).all()
+            all_msgs.sort(key=lambda x: x.id)
 
-        lines_for_prompt = []
-        for msg in all_msgs:
-            if msg.role.lower() == "assistant":
-                lines_for_prompt.append(f"Assistant: {msg.text}")
-            else:
-                lines_for_prompt.append(f"User ({msg.member.name}): {msg.text}")
-        conversation_str = "\n".join(lines_for_prompt)
+            lines_for_prompt = []
+            for msg in all_msgs:
+                if msg.role.lower() == "assistant":
+                    lines_for_prompt.append(f"Assistant: {msg.text}")
+                else:
+                    lines_for_prompt.append(f"User ({msg.member.name}): {msg.text}")
+            conversation_str = "\n".join(lines_for_prompt)
 
-        # generate final LLaMA answer
-        bot_response = self._generate_response(conversation_str, text)
-        assistant_msg = Message(
-            member_id=member.id,
-            role="Assistant",
-            text=bot_response,
-            detected_emotion="(Top-5 used)" if is_valuable else "(Skipped)",
-            stage_at_time=final_stage if final_stage else "Uncertain"
-        )
-        db.add(assistant_msg)
-        db.commit()
+            # Generate final LLaMA answer
+            bot_response = self._generate_response(conversation_str, text)
+            assistant_msg = Message(
+                member_id=member.id,
+                role="Assistant",
+                text=bot_response,
+                detected_emotion="(Top-5 used)" if is_valuable else "(Skipped)",
+                stage_at_time=final_stage if final_stage else "Uncertain"
+            )
+            db.add(assistant_msg)
+            db.commit()
 
-        # Return 7 items to match main.py's 7-value unpack
-        return (
-            bot_response,
-            final_stage,
-            team_feedback,
-            accum_dist,
-            last_emotion_dist,
-            accum_emotions,
-            personal_feedback
-        )
+            # Return 7 items to match main.py's 7-value unpack
+            return (
+                bot_response,
+                final_stage,
+                team_feedback,
+                accum_dist,
+                last_emotion_dist,
+                accum_emotions,
+                personal_feedback
+            )
+        else:
+            # In analysis mode, skip generating responses
+            return (
+                None,  # bot_response not needed
+                final_stage,
+                team_feedback,
+                accum_dist,
+                last_emotion_dist,
+                accum_emotions,
+                personal_feedback
+            )
 
     def analyze_conversation_db(self, db, team_name: str, chat_log: str):
         """
@@ -338,7 +398,7 @@ class ChatbotGenerative:
             messages = db.query(Message).filter(Message.member_id == member.id).all()
             for message in messages:
                 _, concluded_stage, concluded_feedback, _, _, _, _ = self.process_line(
-                    db, team_name, member_name, message.text
+                    db, team_name, member_name, message.text, mode="analysis"
                 )
                 # Update final_stage and feedback if found
                 if concluded_stage:
@@ -353,6 +413,9 @@ class ChatbotGenerative:
         return final_stage, feedback, distribution
 
     def reset_team(self, db, team_name: str):
+        """
+        Resets the team's stage and clears all associated member data.
+        """
         team = db.query(Team).filter(Team.name == team_name).first()
         if team:
             team.current_stage = "Uncertain"
@@ -371,4 +434,3 @@ class ChatbotGenerative:
                 keys_to_delete.append((t_name, m_name))
         for k in keys_to_delete:
             del self.lines_since_final_stage[k]
-
