@@ -54,18 +54,22 @@ class ChatbotGenerative:
     def _extract_members_and_messages(self, chat_log: str):
         """
         Extracts members and messages from the provided chat log.
-        Chat log format: [timestamp] Name: message
+        Handles both formats:
+        1. [timestamp] Name: message
+        2. Name: message
         """
         member_message_map = {}
-        pattern = re.compile(r"\[(.*?)\] (.*?): (.*)")
+        # Regular expression to match both formats
+        pattern = re.compile(r"(?:\[(.*?)\] )?(.*?): (.*)")
 
         for line in chat_log.splitlines():
             match = pattern.match(line)
             if match:
                 _, name, message = match.groups()
-                if name not in member_message_map:
-                    member_message_map[name] = []
-                member_message_map[name].append(message)
+                if name:  # Ensure we have a valid name
+                    if name not in member_message_map:
+                        member_message_map[name] = []
+                    member_message_map[name].append(message)
 
         return member_message_map
 

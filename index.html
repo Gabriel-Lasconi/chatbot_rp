@@ -221,6 +221,7 @@
       line-height: 1.4;
       box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
     }
+
     #feedbackPopup {
         display: none;
         position: fixed;
@@ -250,6 +251,7 @@
         max-height: 300px;
         overflow-y: auto;
     }
+
     #stageBars {
       padding: 20px;
       display: flex;
@@ -284,7 +286,6 @@
       background: #4a90e2;
       transition: width 0.5s ease;
     }
-
 
     .stagePercentage {
       font-size: 14px;
@@ -379,6 +380,128 @@
       }
     }
 
+    /* Custom File Upload Styling */
+    .custom-file-upload {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .custom-file-upload button {
+      padding: 10px 20px;
+      background: #4a90e2;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    .custom-file-upload button:hover {
+      background: #357ab8;
+    }
+
+    #fileUpload {
+      display: none;
+    }
+
+    #fileUploadName {
+      font-size: 14px;
+      color: #555;
+    }
+
+    /* Analysis Mode Styling */
+    #analysisMode {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      padding: 20px;
+      background: #f9f9f9;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .analysis-section {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #analysisInput {
+      flex: 1;
+      height: 150px;
+      padding: 10px;
+      font-size: 14px;
+      border: 1px solid #dce1ed;
+      border-radius: 8px;
+      resize: vertical;
+      background: #fff;
+    }
+
+    .analysis-section button {
+      padding: 10px 20px;
+      background: #4a90e2;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    .analysis-section button:hover {
+      background: #357ab8;
+    }
+
+    .upload-section {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .upload-section label {
+      font-size: 14px;
+      color: #555;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 600px) {
+      #appContainer {
+        flex-direction: column;
+        width: 95%;
+        height: auto;
+      }
+
+      #chatColumn, #stageColumn {
+        flex: none;
+        width: 100%;
+      }
+
+      .analysis-section {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .analysis-section button {
+        width: 100%;
+      }
+
+      .upload-section {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .custom-file-upload {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      #fileUploadName {
+        margin-top: 5px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -405,7 +528,9 @@
             placeholder="Enter Team Name..."
             onblur="App.autoLoadTeamInfo()"
           />
-          <input type="text" id="memberName" placeholder="Enter Your Name..." />
+          <div id="memberContainer">
+            <input type="text" id="memberName" placeholder="Enter Your Name..." />
+          </div>
         </div>
 
         <div id="conversationMode">
@@ -416,13 +541,21 @@
         </div>
 
         <div id="analysisMode" class="hidden">
-          <textarea
-            id="analysisInput"
-            placeholder="Paste multiple lines here... (each message on one line)"
-          ></textarea>
-          <button onclick="App.analyzeConversation()">Analyze</button>
-          <label for="fileUpload">Or upload a chat log file:</label>
-          <input type="file" id="fileUpload" accept=".txt" onchange="App.processFileUpload()" />
+          <!-- Upload Section -->
+          <div class="upload-section">
+            <label for="fileUpload">Upload a chat log file:</label>
+            <div class="custom-file-upload">
+              <button type="button" onclick="document.getElementById('fileUpload').click()">Choose File</button>
+              <span id="fileUploadName">No file chosen</span>
+              <input type="file" id="fileUpload" accept=".txt" onchange="App.processFileUpload()" />
+            </div>
+          </div>
+
+          <!-- Analysis Input Section -->
+          <div class="analysis-section">
+            <textarea id="analysisInput" placeholder="Paste multiple lines here... (each message on one line)"></textarea>
+            <button onclick="App.analyzeConversation()">Analyze</button>
+          </div>
         </div>
       </div>
     </div>
@@ -431,29 +564,27 @@
       <div id="stageHeader">Stage Distribution (Team Stage)</div>
 
       <div id="stageToggle" class="toggle-buttons">
-        <button class="toggle-btn active" onclick="App.showTeamStageDistribution(event)">Team Stage</button>
-        <button class="toggle-btn" onclick="App.showMyStageDistribution(event)">My Stage</button>
+        <button class="toggle-btn active" id="teamStageBtn" onclick="App.showTeamStageDistribution()">Team Stage</button>
+        <button class="toggle-btn" id="myStageBtn" onclick="App.showMyStageDistribution()">My Stage</button>
       </div>
 
-          <div id="finalStageInfo">
+      <div id="finalStageInfo">
         <h3>Current Stage: <span id="finalStageSpan">Uncertain</span></h3>
-            <button id="openFeedbackBtn" class="mode-btn" onclick="App.openFeedbackPopup()">Open Feedback</button>
+        <button id="openFeedbackBtn" class="mode-btn" onclick="App.openFeedbackPopup()">Open Feedback</button>
         <div id="feedbackTextContainer">
-            <div id="feedbackText" class="scrollable">
-                <p id="stageFeedback">No data available.</p>
-            </div>
+          <div id="feedbackText" class="scrollable">
+            <p id="stageFeedback">No data available.</p>
+          </div>
         </div>
-    </div>
+      </div>
 
       <div id="feedbackPopup" class="hidden">
-    <div id="popupContent">
-        <h3>Feedback</h3>
-        <div id="popupFeedbackText"></div>
-        <button class="mode-btn" onclick="App.closeFeedbackPopup()">Close</button>
-    </div>
+        <div id="popupContent">
+          <h3>Feedback</h3>
+          <div id="popupFeedbackText"></div>
+          <button class="mode-btn" onclick="App.closeFeedbackPopup()">Close</button>
+        </div>
       </div>
-
-
 
       <div id="stageBars"></div>
 

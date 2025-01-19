@@ -1,6 +1,7 @@
 /* app.js */
+
 const App = (function() {
-  // PRIVATE STATE in closure, if you want to store lastEmotions, accumEmotions, etc.
+  // PRIVATE STATE in closure
   let previousDistribution = null; // for stage distribution deltas
   let lastEmotionsData = {};
   let accumEmotionsData = {};
@@ -18,30 +19,79 @@ const App = (function() {
   }
 
   // MODE SWITCH
-  function switchToConversationMode() {
+  async function switchToConversationMode() {
     const confirmed = confirm("Switch to conversation mode? This will erase the current chat history. Continue?");
     if(!confirmed) return;
     clearConversation();
     document.getElementById("analysisMode").classList.add("hidden");
     document.getElementById("conversationMode").classList.remove("hidden");
-    document.getElementById("teamName").value = "";
+    // Reset fields except teamName
+    // document.getElementById("teamName").value = ""; // Do not clear teamName
     document.getElementById("memberName").value = "";
     document.getElementById("analysisInput").value = "";
     document.getElementById("userInput").value = "";
     resetStageUI();
+
+    // Show member name input and emotions section
+    document.getElementById("memberContainer").classList.remove("hidden");
+    document.getElementById("lastEmotionsInfo").classList.remove("hidden");
+    document.getElementById("myStageBtn").classList.remove("hidden");
+    document.getElementById("teamStageBtn").classList.remove("hidden");
+
+    // Ensure "Team Stage" button is active and show team distribution
+    await setActiveStageButton("teamStageBtn");
   }
 
-  function switchToAnalysisMode() {
+  async function switchToAnalysisMode() {
     const confirmed = confirm("Switch to analysis mode? This will erase the current chat history. Continue?");
     if(!confirmed) return;
     clearConversation();
     document.getElementById("conversationMode").classList.add("hidden");
     document.getElementById("analysisMode").classList.remove("hidden");
-    document.getElementById("teamName").value = "";
+    // Reset fields except teamName
+    // document.getElementById("teamName").value = ""; // Do not clear teamName
     document.getElementById("memberName").value = "";
     document.getElementById("analysisInput").value = "";
     document.getElementById("userInput").value = "";
     resetStageUI();
+
+    // Hide member name input and emotions section
+    document.getElementById("memberContainer").classList.add("hidden");
+    document.getElementById("lastEmotionsInfo").classList.add("hidden");
+    // Hide "My Stage" button, keep only "Team Stage"
+    document.getElementById("myStageBtn").classList.add("hidden");
+    document.getElementById("teamStageBtn").classList.add("hidden");
+
+    // Ensure "Team Stage" button is active and show team distribution
+    await setActiveStageButton("teamStageBtn");
+  }
+
+  // Helper function to set active stage button
+  async function setActiveStageButton(activeButtonId) {
+    const teamStageBtn = document.getElementById("teamStageBtn");
+    const myStageBtn = document.getElementById("myStageBtn");
+    const teamNameElem = document.getElementById("teamName");
+
+    if (myStageBtn) myStageBtn.classList.remove("active");
+    if (teamStageBtn) {
+      teamStageBtn.classList.add("active");
+
+      // Check if teamName is set
+      const originalTeamName = teamNameElem.value.trim();
+      let usedTemporary = false;
+      if (!originalTeamName) {
+        teamNameElem.value = "Temporary Team";
+        usedTemporary = true;
+      }
+
+      // Call showTeamStageDistribution without event
+      await showTeamStageDistribution();
+
+      // Restore original teamName if a temporary one was used
+      if (usedTemporary) {
+        teamNameElem.value = "";
+      }
+    }
   }
 
   // RENDER STAGE
@@ -92,90 +142,78 @@ const App = (function() {
   }
 
   function toggleButtonActiveState(containerId, clickedButton) {
-  const buttons = document.querySelectorAll(`#${containerId} .toggle-btn`);
-  buttons.forEach((btn) => btn.classList.remove("active"));
-  clickedButton.classList.add("active");
-}
-
-// TEAM vs MY STAGE
-async function showTeamStageDistribution(event) {
-  console.log("showTeamStageDistribution() called");
-
-  // Ensure the event target exists
-  if (!event || !event.target) {
-    console.error("Event or event.target is undefined!");
-    return;
+    const buttons = document.querySelectorAll(`#${containerId} .toggle-btn`);
+    buttons.forEach((btn) => btn.classList.remove("active"));
+    clickedButton.classList.add("active");
   }
 
-  // Get team name
-  const teamName = document.getElementById("teamName").value.trim();
-  if (!teamName) {
-    alert("Please enter a team name first!");
-    return;
+  // TEAM vs MY STAGE
+  async function showTeamStageDistribution() {
+    console.log("showTeamStageDistribution() called");
+
+    // Get team name
+    const teamName = document.getElementById("teamName").value.trim();
+    if (!teamName) {
+      alert("Please enter a team name first!");
+      return;
+    }
+
+    // Toggle button active state
+    toggleButtonActiveState("stageToggle", document.getElementById("teamStageBtn"));
+
+    // Update stage header
+    document.getElementById("stageHeader").textContent = "Stage Distribution (Team Stage)";
+
+    try {
+      // Fetch team data
+      const resp = await fetch(
+        `http://127.0.0.1:8000/teaminfo?team_name=${encodeURIComponent(teamName)}`
+      );
+      if (!resp.ok) throw new Error("Could not load team distribution");
+
+      const data = await resp.json();
+
+      // Update stage UI with fetched data
+      updateStageUI(data.distribution, data.final_stage, data.feedback);
+    } catch (err) {
+      console.error("Error loading team stage distribution:", err);
+      alert(err.message);
+    }
   }
 
-  // Toggle button active state
-  toggleButtonActiveState("stageToggle", event.target);
+  async function showMyStageDistribution() {
+    console.log("showMyStageDistribution() called");
 
-  // Update stage header
-  document.getElementById("stageHeader").textContent = "Stage Distribution (Team Stage)";
+    // Get team and member names
+    const teamName = document.getElementById("teamName").value.trim();
+    const memberName = document.getElementById("memberName").value.trim();
+    if (!teamName || !memberName) {
+      alert("Please enter a team and member name first!");
+      return;
+    }
 
-  try {
-    // Fetch team data
-    const resp = await fetch(
-      `http://127.0.0.1:8000/teaminfo?team_name=${encodeURIComponent(teamName)}`
-    );
-    if (!resp.ok) throw new Error("Could not load team distribution");
+    // Toggle button active state
+    toggleButtonActiveState("stageToggle", document.getElementById("myStageBtn"));
 
-    const data = await resp.json();
+    // Update stage header
+    document.getElementById("stageHeader").textContent = "Stage Distribution (My Stage)";
 
-    // Update stage UI with fetched data
-    updateStageUI(data.distribution, data.final_stage, data.feedback);
-  } catch (err) {
-    console.error("Error loading team stage distribution:", err);
-    alert(err.message);
+    try {
+      // Fetch member data
+      const resp = await fetch(
+        `http://127.0.0.1:8000/memberinfo?team_name=${encodeURIComponent(teamName)}&member_name=${encodeURIComponent(memberName)}`
+      );
+      if (!resp.ok) throw new Error("Could not load member info");
+
+      const data = await resp.json();
+
+      // Update stage UI with fetched data
+      updateStageUI(data.distribution, data.final_stage, data.personal_feedback);
+    } catch (err) {
+      console.error("Error loading my stage distribution:", err);
+      alert(err.message);
+    }
   }
-}
-
-async function showMyStageDistribution(event) {
-  console.log("showMyStageDistribution() called");
-
-  // Ensure the event target exists
-  if (!event || !event.target) {
-    console.error("Event or event.target is undefined!");
-    return;
-  }
-
-  // Get team and member names
-  const teamName = document.getElementById("teamName").value.trim();
-  const memberName = document.getElementById("memberName").value.trim();
-  if (!teamName || !memberName) {
-    alert("Please enter a team and member name first!");
-    return;
-  }
-
-  // Toggle button active state
-  toggleButtonActiveState("stageToggle", event.target);
-
-  // Update stage header
-  document.getElementById("stageHeader").textContent = "Stage Distribution (My Stage)";
-
-  try {
-    // Fetch member data
-    const resp = await fetch(
-      `http://127.0.0.1:8000/memberinfo?team_name=${encodeURIComponent(teamName)}&member_name=${encodeURIComponent(memberName)}`
-    );
-    if (!resp.ok) throw new Error("Could not load member info");
-
-    const data = await resp.json();
-
-    // Update stage UI with fetched data
-    updateStageUI(data.distribution, data.final_stage, data.personal_feedback);
-  } catch (err) {
-    console.error("Error loading my stage distribution:", err);
-    alert(err.message);
-  }
-}
 
   // EMOTIONS
   function renderEmotionsInBars(emotions){
@@ -196,88 +234,88 @@ async function showMyStageDistribution(event) {
     }
   }
 
-function showLastEmotions() {
-  console.log("showLastEmotions() called");
+  function showLastEmotions() {
+    console.log("showLastEmotions() called");
 
-  // Get the toggle buttons
-  const lastMessageBtn = document.getElementById("lastMessageBtn");
-  const accumEmotionsBtn = document.getElementById("accumEmotionsBtn");
+    // Get the toggle buttons
+    const lastMessageBtn = document.getElementById("lastMessageBtn");
+    const accumEmotionsBtn = document.getElementById("accumEmotionsBtn");
 
-  // Ensure buttons exist before manipulating
-  if (!lastMessageBtn || !accumEmotionsBtn) {
-    console.error("Emotions toggle buttons not found in the DOM!");
-    return;
-  }
-
-  // Toggle active states
-  lastMessageBtn.classList.add("active");
-  accumEmotionsBtn.classList.remove("active");
-
-  // Update emotions title
-  document.getElementById("emotionsTitle").textContent = "Emotions (Last Message)";
-
-  // Handle empty emotions data
-  if (!lastEmotionsData || Object.keys(lastEmotionsData).length === 0) {
-    document.getElementById("emotionBars").innerHTML =
-      "<p style='font-size:14px;color:#777;'>No emotions detected yet. Please write a message!</p>";
-    return;
-  }
-
-  // Render emotions data
-  renderEmotionsInBars(lastEmotionsData);
-}
-
-
-async function showAccumEmotions() {
-  console.log("showAccumEmotions() called");
-
-  // Get the toggle buttons
-  const lastMessageBtn = document.getElementById("lastMessageBtn");
-  const accumEmotionsBtn = document.getElementById("accumEmotionsBtn");
-
-  // Ensure buttons exist before manipulating
-  if (!lastMessageBtn || !accumEmotionsBtn) {
-    console.error("Emotions toggle buttons not found in the DOM!");
-    return;
-  }
-
-  // Toggle active states
-  accumEmotionsBtn.classList.add("active");
-  lastMessageBtn.classList.remove("active");
-
-  // Update emotions title
-  document.getElementById("emotionsTitle").textContent = "Emotions (Accumulative)";
-
-  // Fetch and render accumulated emotions
-  const teamName = document.getElementById("teamName").value.trim();
-  const memberName = document.getElementById("memberName").value.trim();
-
-  if (!teamName || !memberName) {
-    alert("Please enter both team & member name!");
-    return;
-  }
-
-  try {
-    const resp = await fetch(
-      `http://127.0.0.1:8000/memberinfo?team_name=${encodeURIComponent(teamName)}&member_name=${encodeURIComponent(memberName)}`
-    );
-    if (!resp.ok) throw new Error("Could not load member info");
-
-    const data = await resp.json();
-    const accumEmo = data.accum_emotions || {};
-
-    if (!accumEmo || Object.keys(accumEmo).length === 0) {
-      document.getElementById("emotionBars").innerHTML =
-        "<p style='font-size:14px;color:#777;'>No emotions yet for this member!</p>";
+    // Ensure buttons exist before manipulating
+    if (!lastMessageBtn || !accumEmotionsBtn) {
+      console.error("Emotions toggle buttons not found in the DOM!");
       return;
     }
 
-    renderEmotionsInBars(accumEmo);
-  } catch (error) {
-    console.error("Error in showAccumEmotions", error);
-    alert(error.message);
+    // Toggle active states
+    lastMessageBtn.classList.add("active");
+    accumEmotionsBtn.classList.remove("active");
+
+    // Update emotions title
+    document.getElementById("emotionsTitle").textContent = "Emotions (Last Message)";
+
+    // Handle empty emotions data
+    if (!lastEmotionsData || Object.keys(lastEmotionsData).length === 0) {
+      document.getElementById("emotionBars").innerHTML =
+        "<p style='font-size:14px;color:#777;'>No emotions detected yet. Please write a message!</p>";
+      return;
+    }
+
+    // Render emotions data
+    renderEmotionsInBars(lastEmotionsData);
   }
-}
+
+
+  async function showAccumEmotions() {
+    console.log("showAccumEmotions() called");
+
+    // Get the toggle buttons
+    const lastMessageBtn = document.getElementById("lastMessageBtn");
+    const accumEmotionsBtn = document.getElementById("accumEmotionsBtn");
+
+    // Ensure buttons exist before manipulating
+    if (!lastMessageBtn || !accumEmotionsBtn) {
+      console.error("Emotions toggle buttons not found in the DOM!");
+      return;
+    }
+
+    // Fetch and render accumulated emotions
+    const teamName = document.getElementById("teamName").value.trim();
+    const memberName = document.getElementById("memberName").value.trim();
+
+    if (!teamName || !memberName) {
+      alert("Please enter both team & member name!");
+      return;
+    }
+
+    // Toggle active states
+    accumEmotionsBtn.classList.add("active");
+    lastMessageBtn.classList.remove("active");
+
+    // Update emotions title
+    document.getElementById("emotionsTitle").textContent = "Emotions (Accumulative)";
+
+    try {
+      const resp = await fetch(
+        `http://127.0.0.1:8000/memberinfo?team_name=${encodeURIComponent(teamName)}&member_name=${encodeURIComponent(memberName)}`
+      );
+      if (!resp.ok) throw new Error("Could not load member info");
+
+      const data = await resp.json();
+      const accumEmo = data.accum_emotions || {};
+
+      if (!accumEmo || Object.keys(accumEmo).length === 0) {
+        document.getElementById("emotionBars").innerHTML =
+          "<p style='font-size:14px;color:#777;'>No emotions yet for this member!</p>";
+        return;
+      }
+
+      renderEmotionsInBars(accumEmo);
+    } catch (error) {
+      console.error("Error in showAccumEmotions", error);
+      alert(error.message);
+    }
+  }
 
 
   // AUTO LOAD TEAM INFO
@@ -295,90 +333,95 @@ async function showAccumEmotions() {
     }
   }
 
-async function sendMessage() {
-    const teamName = document.getElementById("teamName").value.trim();
-    const memberName = document.getElementById("memberName").value.trim();
-    const userMsg = document.getElementById("userInput").value.trim();
-    const conversationElem = document.getElementById("conversation");
+  async function sendMessage() {
+      const teamName = document.getElementById("teamName").value.trim();
+      const memberName = document.getElementById("memberName").value.trim();
+      const userMsg = document.getElementById("userInput").value.trim();
+      const conversationElem = document.getElementById("conversation");
 
-    if (!teamName) {
-        alert("Please enter a team name!");
-        return;
-    }
-    if (!memberName) {
-        alert("Please enter your (member) name!");
-        return;
-    }
-    if (!userMsg) {
-        alert("Please enter a message!");
-        return;
-    }
+      if (!teamName) {
+          alert("Please enter a team name!");
+          return;
+      }
+      // Only require memberName in Conversation Mode
+      if (!document.getElementById("analysisMode").classList.contains("hidden") && !memberName) {
+          alert("Please enter your (member) name!");
+          return;
+      }
+      if (!userMsg) {
+          alert("Please enter a message!");
+          return;
+      }
 
-    document.getElementById("userInput").value = "";
+      document.getElementById("userInput").value = "";
 
-    // Display user bubble
-    conversationElem.innerHTML += `<div class="bubble user">${userMsg}</div>`;
-    conversationElem.scrollTop = conversationElem.scrollHeight;
+      // Display user bubble
+      conversationElem.innerHTML += `<div class="bubble user">${userMsg}</div>`;
+      conversationElem.scrollTop = conversationElem.scrollHeight;
 
-    // Display loading indicator
-    const thinkingDiv = document.createElement("div");
-    thinkingDiv.classList.add("bubble", "bot");
-    thinkingDiv.innerHTML = `
-        <span class="spinner"></span>
-        <span style="margin-left:5px;">Thinking...</span>
-    `;
-    conversationElem.appendChild(thinkingDiv);
-    conversationElem.scrollTop = conversationElem.scrollHeight;
+      // Display loading indicator
+      const thinkingDiv = document.createElement("div");
+      thinkingDiv.classList.add("bubble", "bot");
+      thinkingDiv.innerHTML = `
+          <span class="spinner"></span>
+          <span style="margin-left:5px;">Thinking...</span>
+      `;
+      conversationElem.appendChild(thinkingDiv);
+      conversationElem.scrollTop = conversationElem.scrollHeight;
 
-    const payload = {
-        text: userMsg,
-        team_name: teamName,
-        member_name: memberName,
-    };
+      const payload = {
+          text: userMsg,
+          team_name: teamName,
+          member_name: memberName,
+      };
 
-    try {
-        const response = await fetch("http://127.0.0.1:8000/chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-        });
-        if (!response.ok) {
-            throw new Error("Failed to connect to the chatbot (conversation mode).");
-        }
+      try {
+          const response = await fetch("http://127.0.0.1:8000/chat", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+          });
+          if (!response.ok) {
+              throw new Error("Failed to connect to the chatbot (conversation mode).");
+          }
 
-        const data = await response.json();
-        console.log(data);
-        const botMessage = data.bot_message || "No response available.";
-        conversationElem.removeChild(thinkingDiv);
+          const data = await response.json();
+          console.log(data);
+          const botMessage = data.bot_message || "No response available.";
+          conversationElem.removeChild(thinkingDiv);
 
-        // Display bot bubble
-        conversationElem.innerHTML += `<div class="bubble bot">${botMessage}</div>`;
-        conversationElem.scrollTop = conversationElem.scrollHeight;
+          // Display bot bubble
+          conversationElem.innerHTML += `<div class="bubble bot">${botMessage}</div>`;
+          conversationElem.scrollTop = conversationElem.scrollHeight;
 
-        // Update stage distribution
-        const distribution = data.distribution || {};
-        const finalStage = data.stage || "Uncertain";
-        const feedback = data.team_feedback || "";
-        document.getElementById("stageHeader").textContent = "Stage Distribution (Team Stage)";
-        updateStageUI(distribution, finalStage, feedback);
+          // Update stage distribution
+          const distribution = data.distribution || {};
+          const finalStage = data.stage || "Uncertain";
+          const feedback = data.team_feedback || "";
+          document.getElementById("stageHeader").textContent = "Stage Distribution (Team Stage)";
+          updateStageUI(distribution, finalStage, feedback);
 
-        // Store and display emotions
-        lastEmotionsData = data.last_emotion_dist || {};
-        accumEmotionsData = data.accum_emotions || {};
-        showLastEmotions(); // Call the updated function
+          // Store and display emotions
+          lastEmotionsData = data.last_emotion_dist || {};
+          accumEmotionsData = data.accum_emotions || {};
+          if (!document.getElementById("analysisMode").classList.contains("hidden")) {
+            // If in Analysis Mode, do not display emotions
+          } else {
+            showLastEmotions(); // Call the updated function
+          }
 
-        // Call the team stage distribution function
-        await showTeamStageDistribution({ target: document.querySelector("#stageToggle .toggle-btn:first-child") });
-    } catch (error) {
-        console.error("Error sending message:", error);
-        alert(error.message);
-        if (conversationElem.contains(thinkingDiv)) {
-            conversationElem.removeChild(thinkingDiv);
-        }
-    }
-}
+          // Call the team stage distribution function
+          await showTeamStageDistribution();
+      } catch (error) {
+          console.error("Error sending message:", error);
+          alert(error.message);
+          if (conversationElem.contains(thinkingDiv)) {
+              conversationElem.removeChild(thinkingDiv);
+          }
+      }
+  }
 
-    function openFeedbackPopup() {
+  function openFeedbackPopup() {
     const feedbackText = document.getElementById("stageFeedback").textContent.trim();
     const popupText = document.getElementById("popupFeedbackText");
 
@@ -409,17 +452,13 @@ async function analyzeConversation() {
   const conversationElem = document.getElementById("conversation");
 
   const teamName = teamNameElem.value.trim();
-  const memberName = memberNameElem.value.trim();
   const bulkText = analysisInputElem.value.trim();
 
   if (!teamName) {
     alert("Please enter a team name!");
     return;
   }
-  if (!memberName) {
-    alert("Please enter your (member) name!");
-    return;
-  }
+  // In Analysis Mode, memberName is not required
   if (!bulkText) {
     alert("Please enter multiple lines to analyze!");
     return;
@@ -433,18 +472,33 @@ async function analyzeConversation() {
 
   const payload = {
     team_name: teamName,
-    member_name: memberName,
     lines: lines
   };
 
   try {
+    // **UPDATED: Change endpoint from /analyze-file to /analyze**
     const response = await fetch("http://127.0.0.1:8000/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
+
     if (!response.ok) {
-      throw new Error("Failed to connect to the chatbot (analysis mode).");
+      // Attempt to parse error message from the backend
+      let errorMessage = `Server Error: ${response.status} ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        if (errorData.detail) {
+          errorMessage += ` - ${JSON.stringify(errorData.detail)}`;
+        }
+      } catch (parseError) {
+        // If response is not JSON
+        const errorText = await response.text();
+        if (errorText) {
+          errorMessage += ` - ${errorText}`;
+        }
+      }
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
@@ -455,7 +509,7 @@ async function analyzeConversation() {
     // Add a short note
     conversationElem.innerHTML += `
       <div class="bubble user" style="font-style:italic;">
-        (Analyzed ${lines.length} lines for team: ${teamName}, member: ${memberName})
+        (Analyzed ${lines.length} lines for team: ${teamName})
       </div>
     `;
     conversationElem.scrollTop = conversationElem.scrollHeight;
@@ -463,8 +517,11 @@ async function analyzeConversation() {
     // Update stage distribution
     updateStageUI(distribution, finalStage, feedback);
 
-    // If you want lastEmotions / accumEmotions after analysis, your server must return them.
-
+    // Since member name is not needed in Analysis Mode, ensure emotions are hidden
+    document.getElementById("lastEmotionsInfo").classList.add("hidden");
+    document.getElementById("myStageBtn").classList.add("hidden");
+    // Use helper function to set active stage button
+    await setActiveStageButton("teamStageBtn");
   } catch (error) {
     console.error("Error analyzing conversation:", error);
     alert(error.message);
@@ -476,41 +533,33 @@ async function analyzeConversation() {
 /********************************************************
   FILE UPLOAD HANDLING
 ********************************************************/
-async function processFileUpload() {
-    const fileInput = document.getElementById("fileUpload");
-    const teamName = document.getElementById("teamName").value.trim();
+function processFileUpload() {
+  const fileInput = document.getElementById("fileUpload");
+  const analysisInput = document.getElementById("analysisInput");
+  const fileUploadName = document.getElementById("fileUploadName");
 
-    if (!teamName) {
-        alert("Please enter a team name!");
-        return;
-    }
+  if (fileInput.files.length === 0) {
+    alert("No file selected. Please upload a valid text file.");
+    fileUploadName.textContent = "No file chosen";
+    return;
+  }
 
-    if (fileInput.files.length === 0) {
-        alert("Please upload a file!");
-        return;
-    }
+  const file = fileInput.files[0];
+  fileUploadName.textContent = file.name;
 
-    const file = fileInput.files[0];
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("team_name", teamName);
+  const reader = new FileReader();
 
-    try {
-        const response = await fetch("http://127.0.0.1:8000/upload_chatlog", {
-            method: "POST",
-            body: formData,
-        });
+  reader.onload = function (event) {
+    const fileContents = event.target.result;
+    analysisInput.value = fileContents;
+  };
 
-        if (!response.ok) {
-            throw new Error("Failed to process the chat log file.");
-        }
+  reader.onerror = function () {
+    alert("Failed to read the file. Please try again.");
+    fileUploadName.textContent = "No file chosen";
+  };
 
-        const result = await response.json();
-        alert("Chat log successfully analyzed and saved!");
-    } catch (error) {
-        console.error("Error processing chat log:", error);
-        alert(error.message);
-    }
+  reader.readAsText(file);
 }
 
 async function uploadFileForAnalysis() {
@@ -520,16 +569,13 @@ async function uploadFileForAnalysis() {
   const conversationElem = document.getElementById("conversation");
 
   const teamName = teamNameElem.value.trim();
-  const memberName = memberNameElem.value.trim();
+  const memberName = memberNameElem.value.trim(); // Not required in Analysis Mode
 
   if (!teamName) {
     alert("Please enter a team name!");
     return;
   }
-  if (!memberName) {
-    alert("Please enter your (member) name!");
-    return;
-  }
+  // In Analysis Mode, memberName is not required
   if (fileInput.files.length === 0) {
     alert("Please upload a valid text file.");
     return;
@@ -538,7 +584,6 @@ async function uploadFileForAnalysis() {
   const file = fileInput.files[0];
   const formData = new FormData();
   formData.append("team_name", teamName);
-  formData.append("member_name", memberName);
   formData.append("file", file);
 
   try {
@@ -548,7 +593,21 @@ async function uploadFileForAnalysis() {
     });
 
     if (!response.ok) {
-      throw new Error("Failed to analyze the uploaded file.");
+      // Attempt to parse error message from the backend
+      let errorMessage = `Server Error: ${response.status} ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        if (errorData.detail) {
+          errorMessage += ` - ${errorData.detail}`;
+        }
+      } catch (parseError) {
+        // If response is not JSON
+        const errorText = await response.text();
+        if (errorText) {
+          errorMessage += ` - ${errorText}`;
+        }
+      }
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
@@ -558,39 +617,43 @@ async function uploadFileForAnalysis() {
 
     conversationElem.innerHTML += `
       <div class="bubble user" style="font-style:italic;">
-        (Analyzed uploaded chat log for team: ${teamName}, member: ${memberName})
+        (Analyzed uploaded chat log for team: ${teamName})
       </div>
     `;
     conversationElem.scrollTop = conversationElem.scrollHeight;
 
     updateStageUI(distribution, finalStage, feedback);
 
+    // Ensure emotions and member-specific UI elements are hidden in Analysis Mode
+    document.getElementById("lastEmotionsInfo").classList.add("hidden");
+    document.getElementById("myStageBtn").classList.add("hidden");
+    // Use helper function to set active stage button
+    await setActiveStageButton("teamStageBtn");
   } catch (error) {
     console.error("Error uploading file for analysis:", error);
     alert(error.message);
   }
 }
 
-  /* Return an object so we can call these from HTML, e.g. onclick="App.switchToConversationMode()" */
-  return {
-    switchToConversationMode,
-    switchToAnalysisMode,
-    autoLoadTeamInfo,
-    sendMessage,
-    analyzeConversation,
-    processFileUpload,
-    uploadFileForAnalysis,
+/* Return an object so we can call these from HTML, e.g. onclick="App.switchToConversationMode()" */
+return {
+  switchToConversationMode,
+  switchToAnalysisMode,
+  autoLoadTeamInfo,
+  sendMessage,
+  analyzeConversation,
+  processFileUpload,
+  uploadFileForAnalysis,
 
-    // Stage distribution toggles
-    showTeamStageDistribution,
-    showMyStageDistribution,
+  // Stage distribution toggles
+  showTeamStageDistribution,
+  showMyStageDistribution,
 
-    // Emotions toggles
-    showLastEmotions,
-    showAccumEmotions,
+  // Emotions toggles
+  showLastEmotions,
+  showAccumEmotions,
 
-    openFeedbackPopup,
-    closeFeedbackPopup
-  };
+  openFeedbackPopup,
+  closeFeedbackPopup
+};
 })();
-

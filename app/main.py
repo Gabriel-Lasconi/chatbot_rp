@@ -1,5 +1,7 @@
+# app/main.py
+
 import os
-from typing import List
+from typing import List, Optional
 
 from fastapi import FastAPI, Depends, Query, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,9 +15,10 @@ from app.chatbot_generative import ChatbotGenerative
 
 app = FastAPI()
 
+# Configure CORS to allow requests from all origins (adjust as needed)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Consider restricting this in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -32,14 +35,16 @@ def get_db():
     finally:
         db.close()
 
+# Mount static files (adjust the path as necessary)
 static_path = os.path.join(os.path.dirname(__file__), "..")
 app.mount("/static", StaticFiles(directory=static_path), name="static")
 
 chatbot = ChatbotGenerative()
 
+# Updated AnalyzeRequest with member_name as Optional
 class AnalyzeRequest(BaseModel):
     team_name: str
-    member_name: str
+    member_name: Optional[str] = None  # Made optional
     lines: List[str]
 
 class ChatRequest(BaseModel):
@@ -127,10 +132,17 @@ def chat_with_bot(req: ChatRequest, db: Session = Depends(get_db)):
 
 @app.post("/analyze")
 def analyze_conversation(req: AnalyzeRequest, db: Session = Depends(get_db)):
-    final_stage, feedback, _ = chatbot.analyze_conversation_db(
-        db, req.team_name, req.lines
-    )
+    try:
+        final_stage, feedback, _ = chatbot.analyze_conversation_db(
+            db, req.team_name, req.lines
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error analyzing conversation: {str(e)}")
+
     the_team = db.query(Team).filter(Team.name == req.team_name).first()
+    if not the_team:
+        raise HTTPException(status_code=404, detail="Team not found.")
+
     team_distribution = the_team.load_team_distribution()
     team_feedback = the_team.feedback if the_team.feedback else ""
 
@@ -143,19 +155,26 @@ def analyze_conversation(req: AnalyzeRequest, db: Session = Depends(get_db)):
 
 @app.post("/analyze-file")
 async def analyze_file(
-    team_name: str,
+    team_name: str = Query(...),
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
     if not file.filename.endswith(".txt"):
         raise HTTPException(status_code=400, detail="Only .txt files are supported")
 
-    file_contents = (await file.read()).decode("utf-8")
+    try:
+        file_contents = (await file.read()).decode("utf-8")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Failed to read the uploaded file.")
+
     lines = file_contents.splitlines()
 
-    final_stage, feedback, distribution = chatbot.analyze_conversation_db(
-        db, team_name, lines
-    )
+    try:
+        final_stage, feedback, distribution = chatbot.analyze_conversation_db(
+            db, team_name, lines
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error analyzing conversation: {str(e)}")
 
     return {
         "final_stage": final_stage,
