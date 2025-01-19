@@ -18,15 +18,12 @@ class TuckmanScenarioTest(unittest.TestCase):
         Base.metadata.create_all(cls.engine)
         cls.db = SessionLocal()
         cls.chatbot = ChatbotGenerative()
-
-
-        # This list will store scenario-by-scenario results, which we will dump to Excel
         cls.results = []
 
     def test_scenarios(self):
         """
         A single test method that iterates over multiple synthetic Tuckman stage scenarios.
-        Each scenario has ~10 lines with more natural expressions,
+        Each scenario has ~20 lines with more natural expressions,
         an expected final stage, and a manual list of expected emotions per line.
         """
 
@@ -463,32 +460,25 @@ class TuckmanScenarioTest(unittest.TestCase):
             }
         ]
 
-        # We'll store scenario-by-scenario results in self.results
         for scenario in scenarios:
             team_name = scenario["team_name"]
             expected_stage = scenario["expected_stage"]
             lines_data = scenario["lines"]
 
-            # Convert the lines to raw text
             text_lines = [d["text"] for d in lines_data]
 
-            # 1) Analyze entire conversation with analyze_conversation_db
             final_stage, feedback, accum_dist = self.chatbot.analyze_conversation_db(
                 self.db, team_name, text_lines
             )
 
-            # Stage correctness
             stage_correct = (final_stage == expected_stage)
 
-            # 2) Evaluate emotion accuracy line-by-line
-            # We'll call process_line for each line to get last_emotion_dist
             line_correct_count = 0
             total_lines = len(lines_data)
             for line_item in lines_data:
                 text_line = line_item["text"]
                 expected_emos = line_item["expected_emotions"]  # list
 
-                # process a single line
                 (
                     bot_msg,
                     concluded_stage,
@@ -499,8 +489,6 @@ class TuckmanScenarioTest(unittest.TestCase):
                     personal_feedback_line
                 ) = self.chatbot.process_line(self.db, team_name, "X", text_line)
 
-                # Build top-5 from last_emotion_dist_line
-                # last_emotion_dist_line is presumably { "emotion_label": confidence, ... }
                 top5_emos = sorted(
                     last_emotion_dist_line.items(),
                     key=lambda x: x[1],
@@ -508,7 +496,6 @@ class TuckmanScenarioTest(unittest.TestCase):
                 )[:5]
                 top5_labels = [t[0].lower().strip() for t in top5_emos]
 
-                # If any of the expected emos is found => correct line
                 correct_line = False
                 for e_emo in expected_emos:
                     if e_emo.lower().strip() in top5_labels:
@@ -531,7 +518,6 @@ class TuckmanScenarioTest(unittest.TestCase):
             }
             self.results.append(scenario_result)
 
-        # 3) Save results to Excel
         self.create_excel_summary(self.results, "scenarios_results.xlsx")
 
     def create_excel_summary(self, results, filename):

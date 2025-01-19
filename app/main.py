@@ -15,33 +15,37 @@ from app.chatbot_generative import ChatbotGenerative
 
 app = FastAPI()
 
-# Configure CORS to allow requests from all origins (adjust as needed)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Consider restricting this in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# ========================================================
+# DATABASE INITIALIZATION
+# ========================================================
 @app.on_event("startup")
 def on_startup():
     init_db()
 
 def get_db():
+    """
+    Dependency that provides a database session.
+    Ensures the session is closed after use.
+    """
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
 
-# Mount static files (adjust the path as necessary)
 static_path = os.path.join(os.path.dirname(__file__), "..")
 app.mount("/static", StaticFiles(directory=static_path), name="static")
 
 chatbot = ChatbotGenerative()
 
-# Updated AnalyzeRequest with member_name as Optional
 class AnalyzeRequest(BaseModel):
     team_name: str
     member_name: Optional[str] = None  # Made optional
@@ -52,8 +56,15 @@ class ChatRequest(BaseModel):
     team_name: str
     member_name: str
 
+# ========================================================
+# ROUTES
+# ========================================================
+
 @app.get("/", response_class=HTMLResponse)
 def root_page():
+    """
+    Serves the main HTML page.
+    """
     index_path = os.path.join(os.path.dirname(__file__), "..", "index.html")
     if os.path.exists(index_path):
         with open(index_path, "r", encoding="utf-8") as f:
@@ -64,6 +75,16 @@ def root_page():
 
 @app.get("/teaminfo")
 def get_team_info(team_name: str = Query(...), db: Session = Depends(get_db)):
+    """
+    Retrieves team information, including stage distribution and feedback.
+
+    Args:
+        team_name (str): The name of the team.
+        db (Session): Database session.
+
+    Returns:
+        dict: Contains distribution, final_stage, and feedback.
+    """
     team = db.query(Team).filter(Team.name == team_name).first()
     if not team:
         team = Team(name=team_name, current_stage="Uncertain", feedback="")
@@ -84,6 +105,17 @@ def get_team_info(team_name: str = Query(...), db: Session = Depends(get_db)):
 
 @app.get("/memberinfo")
 def get_member_info(team_name: str = Query(...), member_name: str = Query(...), db: Session = Depends(get_db)):
+    """
+    Retrieves member information, including stage distribution and personal feedback.
+
+    Args:
+        team_name (str): The name of the team.
+        member_name (str): The name of the member.
+        db (Session): Database session.
+
+    Returns:
+        dict: Contains distribution, final_stage, accum_emotions, and personal_feedback.
+    """
     team = db.query(Team).filter(Team.name == team_name).first()
     if not team:
         raise HTTPException(status_code=404, detail="Team not found.")
@@ -108,9 +140,18 @@ def get_member_info(team_name: str = Query(...), member_name: str = Query(...), 
         "personal_feedback": personal_feedback
     }
 
-
 @app.post("/chat")
 def chat_with_bot(req: ChatRequest, db: Session = Depends(get_db)):
+    """
+    Handles chat messages sent by users in Conversation Mode.
+
+    Args:
+        req (ChatRequest): The chat request containing text, team_name, and member_name.
+        db (Session): Database session.
+
+    Returns:
+        dict: Contains bot_message, stage information, and emotions data.
+    """
     bot_msg, final_stage, feedback, accum_dist, last_emotion_dist, accum_emotions, personal_feedback = chatbot.process_line(
         db, req.team_name, req.member_name, req.text
     )
@@ -132,6 +173,16 @@ def chat_with_bot(req: ChatRequest, db: Session = Depends(get_db)):
 
 @app.post("/analyze")
 def analyze_conversation(req: AnalyzeRequest, db: Session = Depends(get_db)):
+    """
+    Analyzes a bulk conversation input in Analysis Mode.
+
+    Args:
+        req (AnalyzeRequest): The analysis request containing team_name, member_name, and lines of conversation.
+        db (Session): Database session.
+
+    Returns:
+        dict: Contains final_stage, feedback, distribution, and team_feedback.
+    """
     try:
         final_stage, feedback, _ = chatbot.analyze_conversation_db(
             db, req.team_name, req.lines
@@ -159,12 +210,23 @@ async def analyze_file(
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
+    """
+    Analyzes a chat log file uploaded by the user.
+
+    Args:
+        team_name (str): The name of the team.
+        file (UploadFile): The uploaded text file containing the chat log.
+        db (Session): Database session.
+
+    Returns:
+        dict: Contains final_stage, feedback, and distribution.
+    """
     if not file.filename.endswith(".txt"):
         raise HTTPException(status_code=400, detail="Only .txt files are supported")
 
     try:
         file_contents = (await file.read()).decode("utf-8")
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=400, detail="Failed to read the uploaded file.")
 
     lines = file_contents.splitlines()
@@ -184,6 +246,16 @@ async def analyze_file(
 
 @app.post("/reset")
 def reset_team(req: ChatRequest, db: Session = Depends(get_db)):
+    """
+    Resets a team's stage and clears all associated member data.
+
+    Args:
+        req (ChatRequest): The reset request containing team_name.
+        db (Session): Database session.
+
+    Returns:
+        dict: Confirmation message about the reset action.
+    """
     team = db.query(Team).filter(Team.name == req.team_name).first()
     if team:
         team.current_stage = "Uncertain"
@@ -200,7 +272,9 @@ def reset_team(req: ChatRequest, db: Session = Depends(get_db)):
 
     return {"message": f"Team '{req.team_name}' has been reset."}
 
-
+# ========================================================
+# MAIN APPLICATION
+# ========================================================
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))

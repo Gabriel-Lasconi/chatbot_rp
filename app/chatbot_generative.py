@@ -1,3 +1,5 @@
+# chatbot_generative.py
+
 import re
 
 from langchain_ollama import OllamaLLM
@@ -7,6 +9,10 @@ from app.db import Team, Member, Message
 
 class ChatbotGenerative:
     def __init__(self):
+        """
+        Initializes the ChatbotGenerative with necessary components like the language model,
+        emotion detector, and stage mapper. Also sets up system instructions and tracking for stages.
+        """
         self.model = OllamaLLM(model="llama3.2")
         self.emotion_detector = EmotionDetector()
         self.stage_mapper = StageMapper()
@@ -20,7 +26,12 @@ class ChatbotGenerative:
             "Focus on emotional cues and team dynamics, and maintain a polite, clear, and context-aware dialogue."
         )
 
+        # Tracks the number of lines since the final stage was set for each team-member
         self.lines_since_final_stage = {}
+
+    # ========================================================
+    #   STAGE MAPPER PROPERTY
+    # ========================================================
 
     @property
     def stage_mapper(self):
@@ -30,7 +41,21 @@ class ChatbotGenerative:
     def stage_mapper(self, value):
         self._stage_mapper = value
 
+    # ========================================================
+    #   TEAM AND MEMBER LOADING FUNCTIONS
+    # ========================================================
+
     def _load_team(self, db, team_name: str):
+        """
+        Retrieves or creates a team in the database.
+
+        Args:
+            db (Session): Database session.
+            team_name (str): Name of the team.
+
+        Returns:
+            Team: The team instance.
+        """
         team = db.query(Team).filter(Team.name == team_name).first()
         if not team:
             team = Team(name=team_name, current_stage="Uncertain")
@@ -40,6 +65,17 @@ class ChatbotGenerative:
         return team
 
     def _load_member(self, db, team, member_name: str):
+        """
+        Retrieves or creates a member in the database.
+
+        Args:
+            db (Session): Database session.
+            team (Team): The team instance.
+            member_name (str): Name of the member.
+
+        Returns:
+            Member: The member instance.
+        """
         member = db.query(Member).filter(
             Member.name == member_name,
             Member.team_id == team.id
@@ -51,33 +87,20 @@ class ChatbotGenerative:
             db.refresh(member)
         return member
 
-    def _extract_unique_members_via_llama(self, chat_log: str):
-        """
-        Uses the LLama model to extract a list of unique team member names from the chat log.
-        Ensures that only active participants (who have sent messages) are included.
-        """
-        prompt = (
-            "Extract a list of unique team member names who have sent messages in the following chat log. "
-            "Only include the names of people who have actively participated in the conversation, not names mentioned in the messages.\n\n"
-            f"Chat Log:\n{chat_log}\n\n"
-            "List of team members:"
-        )
-
-        response = self.model.invoke(input=prompt).strip()
-
-        # Assume the response is a comma-separated list of names
-        # e.g., "Sarp Onkahraman, Archie Ιμαμίδης, Max 🔨"
-        members = [name.strip() for name in response.split(",") if name.strip()]
-
-        # Normalize member names to prevent duplicates
-        normalized_members = self._normalize_member_names(members)
-
-        return normalized_members
+    # ========================================================
+    #   CHAT LOG PROCESSING FUNCTIONS
+    # ========================================================
 
     def _normalize_member_names(self, members):
         """
         Normalizes member names by removing emojis and trimming whitespace.
         This helps in preventing duplicates caused by formatting differences.
+
+        Args:
+            members (list): List of member names.
+
+        Returns:
+            list: List of normalized member names.
         """
         normalized = []
         for name in members:
@@ -90,24 +113,28 @@ class ChatbotGenerative:
 
     def _extract_members_and_messages(self, chat_log: str):
         """
-        Extracts members and messages from the provided chat log.
+        Extracts members and their messages from the provided chat log.
         Handles both formats:
         1. [timestamp] Name: message
         2. Name: message
+
+        Args:
+            chat_log (str): The raw chat log text.
+
+        Returns:
+            dict: A mapping of member names to their list of messages.
         """
         member_message_map = {}
 
-        # Clean the chat log to remove problematic characters
         cleaned_chat_log = re.sub(r"[\u200e]", "", chat_log)
 
-        # Regular expression to match both formats
         pattern = re.compile(r"(?:\[(.*?)\] )?(.*?): (.*)")
 
         for line in cleaned_chat_log.splitlines():
             match = pattern.match(line)
             if match:
                 _, name, message = match.groups()
-                if name:  # Ensure we have a valid name
+                if name:
                     if name not in member_message_map:
                         member_message_map[name] = []
                     member_message_map[name].append(message)
@@ -120,17 +147,22 @@ class ChatbotGenerative:
         - Ensures the team exists (creates one if necessary).
         - Extracts members and messages from the chat log.
         - Adds them to the database.
+
+        Args:
+            db (Session): Database session.
+            team_name (str): Name of the team.
+            chat_log (str or list): The raw chat log text or list of messages.
+
+        Returns:
+            list: List of member names extracted from the chat log.
         """
         team = self._load_team(db, team_name)
 
-        # Ensure chat_log is a string
         if isinstance(chat_log, list):
             chat_log = "\n".join(chat_log)
 
-        # Parse the chat log to extract members and their messages
         member_message_map = self._extract_members_and_messages(chat_log)
 
-        # Add members and messages to the database
         for member_name, messages in member_message_map.items():
             member = self._load_member(db, team, member_name)
 
@@ -141,7 +173,22 @@ class ChatbotGenerative:
 
         return member_message_map.keys()
 
+    # ========================================================
+    #   PROMPT BUILDING FUNCTIONS
+    # ========================================================
+
     def _build_prompt(self, conversation_str: str, user_message: str) -> str:
+        """
+        Builds the prompt for the language model by combining system instructions,
+        existing conversation, and the new user message.
+
+        Args:
+            conversation_str (str): The existing conversation history.
+            user_message (str): The latest message from the user.
+
+        Returns:
+            str: The complete prompt for the language model.
+        """
         prompt = (
             f"<<SYS>>\n{self.system_instructions}\n<</SYS>>\n\n"
             f"{conversation_str}\n"
@@ -151,11 +198,34 @@ class ChatbotGenerative:
         return prompt
 
     def _generate_response(self, conversation_str: str, user_message: str) -> str:
+        """
+        Generates a response from the language model based on the conversation and user message.
+
+        Args:
+            conversation_str (str): The existing conversation history.
+            user_message (str): The latest message from the user.
+
+        Returns:
+            str: The generated response from the assistant.
+        """
         prompt = self._build_prompt(conversation_str, user_message)
         response = self.model.invoke(input=prompt)
         return response.strip()
 
+    # ========================================================
+    #   MESSAGE RELEVANCE CLASSIFICATION
+    # ========================================================
+
     def _classify_message_relevance(self, text: str) -> bool:
+        """
+        Classifies whether a user message is 'Valuable' or should be 'Skipped', if it does not have any emotional value.
+
+        Args:
+            text (str): The user message text.
+
+        Returns:
+            bool: True if the message is valuable, False otherwise.
+        """
         classification_prompt = (
             "Classify the following user message as either 'Valuable' or 'Skip'. "
             "The output should be one word, either 'Valuable' or 'Skip'!:\n\n"
@@ -170,18 +240,23 @@ class ChatbotGenerative:
         print("[DEBUG classify_message_relevance] =>", response)
         return response.lower().startswith("valuable")
 
+    # ========================================================
+    #   TEAM STAGE COMPUTATION
+    # ========================================================
+
     def _compute_team_stage(self, db, team):
         """
-        After updating each member's accum_distrib,
-        compute the 'combined' distribution for the entire team,
-        then pick whichever stage has the highest value in that distribution
-        as the final team stage.
+        After updating each member's accum_distrib, compute the 'combined' distribution
+        for the entire team, then pick the stage with the highest value as the final team stage.
+
+        Args:
+            db (Session): Database session.
+            team (Team): The team instance.
         """
         stage_names = ["Forming", "Storming", "Norming", "Performing", "Adjourning"]
         combined = {s: 0.0 for s in stage_names}
         num_members = 0
 
-        # Sum up each member's accum_distrib
         for mem in team.members:
             dist = mem.load_accum_distrib()
             if dist:
@@ -190,95 +265,82 @@ class ChatbotGenerative:
                     if stg in combined:
                         combined[stg] += val
 
-        # If no members have a distribution, set combined to empty
         if num_members > 0:
             for stg in combined:
                 combined[stg] /= num_members
         else:
             combined = {}
 
-        # Save the combined distribution
         team.save_team_distribution(combined)
         db.commit()
 
-        # If combined is empty, set team.current_stage to "Uncertain"
         if not combined or all(v == 0.0 for v in combined.values()):
             team.current_stage = "Uncertain"
             db.commit()
             return
 
-        # Otherwise, find the stage with the maximum value
-        best_stage = None
-        best_val = -1.0
-        for stg, val in combined.items():
-            if val > best_val:
-                best_val = val
-                best_stage = stg
+        best_stage = max(combined, key=combined.get)
+        best_val = combined[best_stage]
 
         team.current_stage = best_stage
         db.commit()
+
+    # ========================================================
+    #   MAIN PROCESSING FUNCTION
+    # ========================================================
 
     def process_line(self, db, team_name: str, member_name: str, text: str, mode: str = "conversation"):
         """
         Processes a single line of conversation, either in conversation or analysis mode.
 
-        Parameters:
-        - db: Database session.
-        - team_name: Name of the team.
-        - member_name: Name of the member.
-        - text: The message text.
-        - mode: 'conversation' or 'analysis'. Determines whether to generate assistant responses.
+        Args:
+            db (Session): Database session.
+            team_name (str): Name of the team.
+            member_name (str): Name of the member.
+            text (str): The message text.
+            mode (str): 'conversation' or 'analysis'. Determines whether to generate assistant responses.
 
         Returns:
-        - If mode is 'conversation':
-            (bot_response, final_stage, team_feedback, accum_dist, last_emotion_dist, accum_emotions, personal_feedback)
-        - If mode is 'analysis':
-            (None, final_stage, team_feedback, accum_dist, last_emotion_dist, accum_emotions, personal_feedback)
+            tuple: Contains bot_response, final_stage, team_feedback, accum_dist,
+                   last_emotion_dist, accum_emotions, personal_feedback.
         """
         team = self._load_team(db, team_name)
         member = self._load_member(db, team, member_name)
 
-        # Create the new user message
         user_msg = Message(member_id=member.id, role="User", text=text)
         db.add(user_msg)
         db.commit()
         db.refresh(user_msg)
 
-        # Load existing data
-        accum_dist = member.load_accum_distrib()       # Tuckman distribution
-        accum_emotions = member.load_accum_emotions()  # overall emotion distribution
-        # Load current data from the database
+        accum_dist = member.load_accum_distrib()
+        accum_emotions = member.load_accum_emotions()
         final_stage = team.load_current_stage()
         team_feedback = team.load_feedback()
         personal_feedback = member.load_personal_feedback()
+
         if not accum_dist:
-            accum_dist = {stg: 0.0 for stg in self._stage_mapper.stage_emotion_map.keys()}
+            accum_dist = {stg: 0.0 for stg in self.stage_mapper.stage_emotion_map.keys()}
         if not accum_emotions:
             accum_emotions = {}
 
         last_emotion_dist = {}
 
-        # Check message relevance
         is_valuable = self._classify_message_relevance(text)
         if is_valuable:
-            # Detect top-5 emotions for this message
             emotion_results = self.emotion_detector.detect_emotion(text, top_n=5)
             top5_emotions = emotion_results["top_emotions"]
 
-            # Store top-5 in the message row
             dist_for_message = {emo["label"]: emo["score"] for emo in top5_emotions}
             user_msg.save_top_emotion_distribution(dist_for_message)
             db.commit()
 
             last_emotion_dist = dist_for_message
 
-            # Update accum_emotions (the entire user's total emotional distribution)
             for e_dict in top5_emotions:
                 lbl = e_dict["label"]
                 conf = e_dict["score"]
                 accum_emotions[lbl] = accum_emotions.get(lbl, 0.0) + conf
 
-            # Re-normalize accum_emotions
             sum_emotions = sum(accum_emotions.values())
             if sum_emotions > 0.0:
                 for e_lbl in accum_emotions:
@@ -287,39 +349,30 @@ class ChatbotGenerative:
             member.save_accum_emotions(accum_emotions)
             db.commit()
 
-            # Re-derive the Tuckman distribution from the entire accum_emotions
             entire_dist = self.stage_mapper.get_stage_distribution_from_entire_emotions(accum_emotions)
             member.save_accum_distrib(entire_dist)
 
-            # (Optional) Finalize the stage if user has enough lines
             member.num_lines += 1
             db.commit()
 
-            # Ephemeral lines track
             key_for_ephemeral = (team_name, member_name)
             if key_for_ephemeral not in self.lines_since_final_stage:
                 self.lines_since_final_stage[key_for_ephemeral] = 0
             self.lines_since_final_stage[key_for_ephemeral] += 1
 
-            # If user has >=3 lines, possibly finalize the stage
             if member.num_lines >= 3:
-                # Find the highest stage in entire_dist
-                best_sum = 0.0
-                best_stage = None
-                for s, v in entire_dist.items():
-                    if v > best_sum:
-                        best_sum = v
-                        best_stage = s
-                if best_sum > 0.5:
+                best_stage = max(entire_dist, key=entire_dist.get)
+                best_val = entire_dist[best_stage]
+
+                if best_val > 0.5:
                     member.current_stage = best_stage
                     db.commit()
+
                     if self.lines_since_final_stage[key_for_ephemeral] >= 3:
-                        # Generate personal feedback
                         personal_feedback = self.stage_mapper.get_personal_feedback(db, member.id, best_stage)
                         member.personal_feedback = personal_feedback
                         db.commit()
 
-                        # Generate team feedback
                         team_feedback = self.stage_mapper.get_team_feedback(db, team.id, best_stage)
                         team.feedback = team_feedback
                         db.commit()
@@ -327,11 +380,9 @@ class ChatbotGenerative:
                         final_stage = best_stage
                         self.lines_since_final_stage[key_for_ephemeral] = 0
 
-        # Recompute the entire team's stage
         self._compute_team_stage(db, team)
 
         if mode == "conversation":
-            # Build conversation string for prompt, loading every message this member had (only the messages of this member, not taking into account his team members)
             all_msgs = db.query(Message).join(Member).filter(Member.id == member.id).all()
             all_msgs.sort(key=lambda x: x.id)
 
@@ -343,7 +394,6 @@ class ChatbotGenerative:
                     lines_for_prompt.append(f"User ({msg.member.name}): {msg.text}")
             conversation_str = "\n".join(lines_for_prompt)
 
-            # Generate final LLaMA answer
             bot_response = self._generate_response(conversation_str, text)
             assistant_msg = Message(
                 member_id=member.id,
@@ -355,7 +405,6 @@ class ChatbotGenerative:
             db.add(assistant_msg)
             db.commit()
 
-            # Return 7 items to match main.py's 7-value unpack
             return (
                 bot_response,
                 final_stage,
@@ -366,9 +415,9 @@ class ChatbotGenerative:
                 personal_feedback
             )
         else:
-            # In analysis mode, skip generating responses
+            # In analysis mode, skip generating assistant responses
             return (
-                None,  # bot_response not needed
+                None,
                 final_stage,
                 team_feedback,
                 accum_dist,
@@ -383,6 +432,14 @@ class ChatbotGenerative:
         - Extracts members and messages.
         - Updates stages and emotions for each member.
         - Returns the overall team stage, feedback, and team distribution.
+
+        Args:
+            db (Session): Database session.
+            team_name (str): Name of the team.
+            chat_log (str): The raw chat log text.
+
+        Returns:
+            tuple: Contains final_stage, feedback, and distribution.
         """
         members = self._process_chat_log(db, team_name, chat_log)
         final_stage = None
@@ -390,40 +447,45 @@ class ChatbotGenerative:
         distribution = {}
 
         for member_name in members:
-            # Retrieve or create team and member
             team = self._load_team(db, team_name)
             member = self._load_member(db, team, member_name)
 
-            # Retrieve all messages for this member
             messages = db.query(Message).filter(Message.member_id == member.id).all()
             for message in messages:
                 _, concluded_stage, concluded_feedback, _, _, _, _ = self.process_line(
                     db, team_name, member_name, message.text, mode="analysis"
                 )
-                # Update final_stage and feedback if found
                 if concluded_stage:
                     final_stage = concluded_stage
                     feedback = concluded_feedback
 
-        # Calculate team distribution after processing all members
         team = self._load_team(db, team_name)
         distribution = team.load_team_distribution()
 
-        # Return the final stage, feedback, and distribution
         return final_stage, feedback, distribution
+
+    # ========================================================
+    #   TEAM RESET FUNCTION
+    # ========================================================
 
     def reset_team(self, db, team_name: str):
         """
         Resets the team's stage and clears all associated member data.
+
+        Args:
+            db (Session): Database session.
+            team_name (str): Name of the team to reset.
         """
         team = db.query(Team).filter(Team.name == team_name).first()
         if team:
             team.current_stage = "Uncertain"
+            team.feedback = ""
             for member in team.members:
                 member.current_stage = "Uncertain"
                 member.save_accum_distrib({})
                 member.num_lines = 0
                 member.save_accum_emotions({})
+                member.personal_feedback = ""
                 db.query(Message).filter(Message.member_id == member.id).delete()
                 db.commit()
             db.commit()

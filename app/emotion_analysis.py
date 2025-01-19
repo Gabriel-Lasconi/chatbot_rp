@@ -4,9 +4,13 @@ from transformers import pipeline
 
 class EmotionDetector:
     def __init__(self):
+        """
+        Initializes the EmotionDetector with a zero-shot classification pipeline
+        and defines a list of candidate emotions mapped to Tuckman's stages.
+        """
         self.zero_shot_classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
 
-        # Updated candidate emotions
+        # Candidate emotions categorized by Tuckman's stages
         self.candidate_emotions = [
             # Forming
             "excitement", "anticipation", "curiosity", "interest", "hope",
@@ -34,9 +38,20 @@ class EmotionDetector:
             "enthusiasm for the future", "closure"
         ]
 
+    # ========================================================
+    #   EMOTION DETECTION FUNCTIONS
+    # ========================================================
+
     def detect_emotion(self, text: str, top_n: int = 5):
         """
-        Detect top emotions using zero-shot classification.
+        Detects the top emotions in the given text using zero-shot classification.
+
+        Args:
+            text (str): The text to analyze.
+            top_n (int): The number of top emotions to return.
+
+        Returns:
+            dict: Contains the dominant emotion, its confidence score, and a list of top emotions with scores.
         """
         if not text.strip():
             return {

@@ -4,10 +4,14 @@ import json
 from sqlalchemy import create_engine, Column, Integer, String, ForeignKey
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 
-DATABASE_URL = "sqlite:///./teams_extended3.db"
+DATABASE_URL = "sqlite:///./database.db"
 engine = create_engine(DATABASE_URL, echo=False)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+# ========================================================
+# DATABASE MODELS
+# ========================================================
 
 class Team(Base):
     __tablename__ = "teams"
@@ -16,12 +20,16 @@ class Team(Base):
     name = Column(String, unique=True, index=True)
     current_stage = Column(String, default="Uncertain")
     stage_distribution = Column(String, default="{}")
-    feedback = Column(String, default="")  # Team feedback column
+    feedback = Column(String, default="")
 
     members = relationship("Member", back_populates="team")
 
+    # ====================================================
+    #   TEAM DATA HANDLING FUNCTIONS
+    # ====================================================
+
     def load_team_distribution(self):
-        """Load stage_distribution as a dict."""
+        """Loads the stage distribution from JSON to a dictionary."""
         try:
             dist = json.loads(self.stage_distribution)
             return dist if isinstance(dist, dict) else {}
@@ -29,15 +37,15 @@ class Team(Base):
             return {}
 
     def save_team_distribution(self, dist_dict):
-        """Save dict to stage_distribution as JSON."""
+        """Saves the stage distribution dictionary as a JSON string."""
         self.stage_distribution = json.dumps(dist_dict)
 
     def load_current_stage(self):
-        """Load the current stage for the team."""
+        """Returns the current stage of the team."""
         return self.current_stage or "Uncertain"
 
     def load_feedback(self):
-        """Load feedback for the team."""
+        """Returns the feedback for the team."""
         return self.feedback or ""
 
 
@@ -52,14 +60,18 @@ class Member(Base):
 
     current_stage = Column(String, default="Uncertain")
     accum_distribution = Column(String, default="{}")  # Tuckman stage distribution
-    accum_emotions = Column(String, default="{}")  # Overall emotional distribution
+    accum_emotions = Column(String, default="{}")      # Overall emotional distribution
     num_lines = Column(Integer, default=0)
-    personal_feedback = Column(String, default="")  # Personal feedback for the member
+    personal_feedback = Column(String, default="")      # Personal feedback for the member
 
     messages = relationship("Message", back_populates="member")
 
+    # ====================================================
+    #   MEMBER DATA HANDLING FUNCTIONS
+    # ====================================================
+
     def load_accum_distrib(self):
-        """Parse accum_distribution (Tuckman) as dict."""
+        """Loads the accumulated Tuckman stage distribution from JSON to a dictionary."""
         try:
             dist = json.loads(self.accum_distribution)
             return dist if isinstance(dist, dict) else {}
@@ -67,11 +79,11 @@ class Member(Base):
             return {}
 
     def save_accum_distrib(self, dist_dict):
-        """Save Tuckman distribution to accum_distribution as JSON."""
+        """Saves the accumulated Tuckman stage distribution as a JSON string."""
         self.accum_distribution = json.dumps(dist_dict)
 
     def load_accum_emotions(self):
-        """Parse accum_emotions (JSON) as dict."""
+        """Loads the accumulated emotions from JSON to a dictionary."""
         try:
             dist = json.loads(self.accum_emotions)
             return dist if isinstance(dist, dict) else {}
@@ -79,15 +91,15 @@ class Member(Base):
             return {}
 
     def save_accum_emotions(self, dist_dict):
-        """Save accumulative emotions as JSON."""
+        """Saves the accumulated emotions as a JSON string."""
         self.accum_emotions = json.dumps(dist_dict)
 
     def load_personal_feedback(self):
-        """Load personal feedback for the member."""
+        """Returns the personal feedback for the member."""
         return self.personal_feedback or ""
 
     def load_current_stage(self):
-        """Load the current stage for the member."""
+        """Returns the current stage of the member."""
         return self.current_stage or "Uncertain"
 
 
@@ -105,8 +117,12 @@ class Message(Base):
 
     member = relationship("Member", back_populates="messages")
 
+    # ====================================================
+    #   MESSAGE DATA HANDLING FUNCTIONS
+    # ====================================================
+
     def load_top_emotion_distribution(self):
-        """Load top_emotion_distribution as dict."""
+        """Loads the top emotion distribution from JSON to a dictionary."""
         try:
             dist = json.loads(self.top_emotion_distribution)
             return dist if isinstance(dist, dict) else {}
@@ -114,8 +130,15 @@ class Message(Base):
             return {}
 
     def save_top_emotion_distribution(self, dist_dict):
+        """Saves the top emotion distribution as a JSON string."""
         self.top_emotion_distribution = json.dumps(dist_dict)
 
 
+# ========================================================
+# DATABASE INITIALIZATION FUNCTION
+# ========================================================
 def init_db():
+    """
+    Initializes the database by creating all tables.
+    """
     Base.metadata.create_all(bind=engine)

@@ -6,13 +6,11 @@ from app.chatbot_generative import ChatbotGenerative
 
 class TestClassifyMessageRelevance(unittest.TestCase):
     def setUp(self):
-        # Mock the LLaMA model
         self.mock_model = MagicMock()
         self.chatbot = ChatbotGenerative()
         self.chatbot.model = self.mock_model
 
     def test_relevant_messages(self):
-        # Mock the response for relevant messages
         self.mock_model.invoke.side_effect = lambda input: "Valuable"
 
         relevant_inputs = [

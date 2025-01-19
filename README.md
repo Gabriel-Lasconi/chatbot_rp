@@ -1,4 +1,4 @@
-This project is a chatbot developed during my Bachelor research project at the University of Twente and designed to understand team emotions and map them to Tuckman’s stages of team development (Forming, Storming, Norming, Performing, and Adjourning).
+A chatbot developed as part of a Bachelor research project at the University of Twente, designed to understand team emotions and map them to Tuckman’s stages of team development: Forming, Storming, Norming, Performing, and Adjourning.
 
 ## Features
 
